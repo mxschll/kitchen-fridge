@@ -24,11 +24,11 @@ pub async fn initial_sync(cache_folder: &str) -> CalDavProvider {
     let cache_path = Path::new(cache_folder);
 
     let client = Client::new(URL, USERNAME, PASSWORD).unwrap();
-    let cache = match Cache::from_folder(&cache_path) {
+    let cache = match Cache::from_folder(cache_path) {
         Ok(cache) => cache,
         Err(err) => {
             log::warn!("Invalid cache file: {}. Using a default cache", err);
-            Cache::new(&cache_path)
+            Cache::new(cache_path)
         }
     };
     let mut provider = CalDavProvider::new(client, cache);
@@ -42,7 +42,7 @@ pub async fn initial_sync(cache_folder: &str) -> CalDavProvider {
         "Depending on your RUST_LOG value, you may see more or less details about the progress."
     );
     // Note that we could use sync_with_feedback() to have better and formatted feedback
-    if provider.sync().await == false {
+    if !(provider.sync().await) {
         log::warn!("Sync did not complete, see the previous log lines for more info. You can safely start a new sync.");
     }
     provider.local().save_to_folder().unwrap();

@@ -25,7 +25,7 @@ async fn main() {
     println!(
         "You can also set the RUST_LOG environment variable to display more info about the sync."
     );
-    println!("");
+    println!();
     println!("This will use the following settings:");
     println!("  * URL = {}", URL);
     println!("  * USERNAME = {}", USERNAME);
