@@ -14,6 +14,7 @@ use crate::utils::random_url;
 ///
 /// * `COMPLETED` is an optional timestamp that tells whether this task is completed
 /// * `STATUS` is an optional field, that can be set to `NEEDS-ACTION`, `COMPLETED`, or others.
+///
 /// Even though having a `COMPLETED` date but a `STATUS:NEEDS-ACTION` is theorically possible, it obviously makes no sense. This API ensures this cannot happen
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum CompletionStatus {
@@ -22,10 +23,7 @@ pub enum CompletionStatus {
 }
 impl CompletionStatus {
     pub fn is_completed(&self) -> bool {
-        match self {
-            CompletionStatus::Completed(_) => true,
-            _ => false,
-        }
+        matches!(self, CompletionStatus::Completed(_))
     }
 }
 
@@ -164,14 +162,12 @@ impl Task {
 
     fn update_sync_status(&mut self) {
         match &self.sync_status {
-            SyncStatus::NotSynced => return,
-            SyncStatus::LocallyModified(_) => return,
+            SyncStatus::NotSynced | SyncStatus::LocallyModified(_) => { /* do nothing */ }
             SyncStatus::Synced(prev_vt) => {
                 self.sync_status = SyncStatus::LocallyModified(prev_vt.clone());
             }
             SyncStatus::LocallyDeleted(_) => {
                 log::warn!("Trying to update an item that has previously been deleted. These changes will probably be ignored at next sync.");
-                return;
             }
         }
     }

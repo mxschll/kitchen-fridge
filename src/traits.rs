@@ -104,7 +104,7 @@ pub trait DavCalendar: BaseCalendar {
     /// Get the URLs of all current items in this calendar
     async fn get_item_urls(&self) -> Result<HashSet<Url>, Box<dyn Error>> {
         let items = self.get_item_version_tags().await?;
-        Ok(items.iter().map(|(url, _tag)| url.clone()).collect())
+        Ok(items.keys().cloned().collect())
     }
 
     // Note: the CalDAV protocol could also enable to do this:

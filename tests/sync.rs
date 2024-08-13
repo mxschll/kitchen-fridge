@@ -242,7 +242,7 @@ impl TestFlavour {
         self.mock_behaviour.lock().unwrap().resume();
         for attempt in 0..max_attempts {
             println!("\nSyncing...\n");
-            if provider.sync().await == true {
+            if provider.sync().await {
                 println!("Sync complete after {} attempts (multiple attempts are due to forced errors in mocked behaviour)", attempt+1);
                 break;
             }

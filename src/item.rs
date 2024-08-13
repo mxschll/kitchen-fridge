@@ -40,17 +40,11 @@ impl Item {
     }
 
     pub fn is_event(&self) -> bool {
-        match &self {
-            Item::Event(_) => true,
-            _ => false,
-        }
+        matches!(self, Item::Event(_))
     }
 
     pub fn is_task(&self) -> bool {
-        match &self {
-            Item::Task(_) => true,
-            _ => false,
-        }
+        matches!(self, Item::Task(_))
     }
 
     /// Returns a mutable reference to the inner Task

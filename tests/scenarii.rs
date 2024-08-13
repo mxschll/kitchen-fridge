@@ -86,9 +86,9 @@ pub struct ItemScenario {
 pub fn scenarii_basic() -> Vec<ItemScenario> {
     let mut tasks = Vec::new();
 
-    let first_cal = Url::from("https://some.calend.ar/calendar-1/".parse().unwrap());
-    let second_cal = Url::from("https://some.calend.ar/calendar-2/".parse().unwrap());
-    let third_cal = Url::from("https://some.calend.ar/calendar-3/".parse().unwrap());
+    let first_cal = "https://some.calend.ar/calendar-1/".parse().unwrap();
+    let second_cal = "https://some.calend.ar/calendar-2/".parse().unwrap();
+    let third_cal = "https://some.calend.ar/calendar-3/".parse().unwrap();
 
     tasks.push(ItemScenario {
         url: random_url(&first_cal),
@@ -405,8 +405,8 @@ pub fn scenarii_basic() -> Vec<ItemScenario> {
 pub fn scenarii_first_sync_to_local() -> Vec<ItemScenario> {
     let mut tasks = Vec::new();
 
-    let cal1 = Url::from("https://some.calend.ar/first/".parse().unwrap());
-    let cal2 = Url::from("https://some.calend.ar/second/".parse().unwrap());
+    let cal1 = "https://some.calend.ar/first/".parse().unwrap();
+    let cal2 = "https://some.calend.ar/second/".parse().unwrap();
 
     tasks.push(ItemScenario {
         url: random_url(&cal1),
@@ -463,8 +463,8 @@ pub fn scenarii_first_sync_to_local() -> Vec<ItemScenario> {
 pub fn scenarii_first_sync_to_server() -> Vec<ItemScenario> {
     let mut tasks = Vec::new();
 
-    let cal3 = Url::from("https://some.calend.ar/third/".parse().unwrap());
-    let cal4 = Url::from("https://some.calend.ar/fourth/".parse().unwrap());
+    let cal3 = "https://some.calend.ar/third/".parse().unwrap();
+    let cal4 = "https://some.calend.ar/fourth/".parse().unwrap();
 
     tasks.push(ItemScenario {
         url: random_url(&cal3),
@@ -521,7 +521,7 @@ pub fn scenarii_first_sync_to_server() -> Vec<ItemScenario> {
 pub fn scenarii_transient_task() -> Vec<ItemScenario> {
     let mut tasks = Vec::new();
 
-    let cal = Url::from("https://some.calend.ar/transient/".parse().unwrap());
+    let cal = "https://some.calend.ar/transient/".parse().unwrap();
 
     tasks.push(ItemScenario {
         url: random_url(&cal),
@@ -607,14 +607,14 @@ async fn populate_test_provider(
             LocatedState::None => continue,
             LocatedState::Local(s) => {
                 assert!(
-                    populate_for_final_state == false,
+                    !populate_for_final_state,
                     "You are not supposed to expect an item in this state after sync"
                 );
                 (s, SyncStatus::NotSynced)
             }
             LocatedState::Remote(s) => {
                 assert!(
-                    populate_for_final_state == false,
+                    !populate_for_final_state,
                     "You are not supposed to expect an item in this state after sync"
                 );
                 (s, SyncStatus::random_synced())

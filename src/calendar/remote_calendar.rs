@@ -56,7 +56,7 @@ impl BaseCalendar for RemoteCalendar {
         &self.name
     }
     fn url(&self) -> &Url {
-        &self.resource.url()
+        self.resource.url()
     }
     fn supported_components(&self) -> crate::calendar::SupportedComponents {
         self.supported_components
@@ -78,7 +78,7 @@ impl BaseCalendar for RemoteCalendar {
             .send()
             .await?;
 
-        if response.status().is_success() == false {
+        if !response.status().is_success() {
             return Err(format!("Unexpected HTTP status code {:?}", response.status()).into());
         }
 
@@ -121,7 +121,7 @@ impl BaseCalendar for RemoteCalendar {
             .send()
             .await?;
 
-        if request.status().is_success() == false {
+        if !request.status().is_success() {
             return Err(format!("Unexpected HTTP status code {:?}", request.status()).into());
         }
 
@@ -209,7 +209,7 @@ impl DavCalendar for RemoteCalendar {
             .send()
             .await?;
 
-        if res.status().is_success() == false {
+        if !res.status().is_success() {
             return Err(format!("Unexpected HTTP status code {:?}", res.status()).into());
         }
 
@@ -275,7 +275,7 @@ impl DavCalendar for RemoteCalendar {
             .send()
             .await?;
 
-        if del_response.status().is_success() == false {
+        if !del_response.status().is_success() {
             return Err(format!("Unexpected HTTP status code {:?}", del_response.status()).into());
         }
 

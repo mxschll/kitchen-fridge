@@ -123,3 +123,9 @@ impl SyncProgress {
             .map(|sender| sender.send(event));
     }
 }
+
+impl Default for SyncProgress {
+    fn default() -> Self {
+        Self::new()
+    }
+}

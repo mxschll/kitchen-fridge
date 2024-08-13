@@ -10,9 +10,9 @@ pub const URL: &str = "https://my.server.com/remote.php/dav/files/john";
 pub const USERNAME: &str = "username";
 pub const PASSWORD: &str = "secret_password";
 
-pub const EXAMPLE_EXISTING_CALENDAR_URL: &str =
+pub const _EXAMPLE_EXISTING_CALENDAR_URL: &str =
     "https://my.server.com/remote.php/dav/calendars/john/a_calendar_name/";
-pub const EXAMPLE_CREATED_CALENDAR_URL: &str =
+pub const _EXAMPLE_CREATED_CALENDAR_URL: &str =
     "https://my.server.com/remote.php/dav/calendars/john/a_calendar_that_we_have_created/";
 
 fn main() {

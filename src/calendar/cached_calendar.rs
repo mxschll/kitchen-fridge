@@ -106,7 +106,7 @@ impl CachedCalendar {
         let items_l = self.get_items().await?;
         let items_r = other.get_items().await?;
 
-        if crate::utils::keys_are_the_same(&items_l, &items_r) == false {
+        if !crate::utils::keys_are_the_same(&items_l, &items_r) {
             log::debug!("Different keys for items");
             return Ok(false);
         }
@@ -115,7 +115,7 @@ impl CachedCalendar {
                 Some(c) => c,
                 None => return Err("should not happen, we've just tested keys are the same".into()),
             };
-            if item_l.has_same_observable_content_as(&item_r) == false {
+            if !item_l.has_same_observable_content_as(item_r) {
                 log::debug!("Different items for URL {}:", url_l);
                 log::debug!("{:#?}", item_l);
                 log::debug!("{:#?}", item_r);
@@ -128,7 +128,7 @@ impl CachedCalendar {
 
     /// The non-async version of [`Self::get_item_urls`]
     pub fn get_item_urls_sync(&self) -> Result<HashSet<Url>, Box<dyn Error>> {
-        Ok(self.items.iter().map(|(url, _)| url.clone()).collect())
+        Ok(self.items.keys().cloned().collect())
     }
 
     /// The non-async version of [`Self::get_items`]
@@ -173,7 +173,7 @@ impl CachedCalendar {
 
     /// The non-async version of [`Self::update_item`]
     pub fn update_item_sync(&mut self, item: Item) -> Result<SyncStatus, Box<dyn Error>> {
-        if self.items.contains_key(item.url()) == false {
+        if !self.items.contains_key(item.url()) {
             return Err(format!(
                 "Item {:?} cannot be updated, it does not already exist",
                 item.url()

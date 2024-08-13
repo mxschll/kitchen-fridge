@@ -54,7 +54,7 @@ impl Cache {
 
     /// Get the path to the cache folder
     pub fn cache_folder() -> PathBuf {
-        return PathBuf::from(String::from("~/.config/my-tasks/cache/"));
+        PathBuf::from(String::from("~/.config/my-tasks/cache/"))
     }
 
     /// Initialize a cache from the content of a valid backing folder if it exists.
@@ -108,7 +108,7 @@ impl Cache {
     }
 
     fn load_calendar(path: &Path) -> Result<CachedCalendar, Box<dyn Error>> {
-        let file = std::fs::File::open(&path)?;
+        let file = std::fs::File::open(path)?;
         Ok(serde_json::from_reader(file)?)
     }
 
@@ -158,7 +158,7 @@ impl Cache {
         let calendars_l = self.get_calendars().await?;
         let calendars_r = other.get_calendars().await?;
 
-        if crate::utils::keys_are_the_same(&calendars_l, &calendars_r) == false {
+        if !crate::utils::keys_are_the_same(&calendars_l, &calendars_r) {
             log::debug!("Different keys for calendars");
             return Ok(false);
         }
@@ -172,7 +172,7 @@ impl Cache {
             };
 
             // TODO: check calendars have the same names/ID/whatever
-            if cal_l.has_same_observable_content_as(&cal_r).await? == false {
+            if !(cal_l.has_same_observable_content_as(&cal_r).await?) {
                 log::debug!("Different calendars");
                 return Ok(false);
             }
@@ -212,7 +212,7 @@ impl Cache {
 
     /// The non-async version of [`crate::traits::CalDavSource::get_calendar`]
     pub fn get_calendar_sync(&self, url: &Url) -> Option<Arc<Mutex<CachedCalendar>>> {
-        self.data.calendars.get(url).map(|arc| arc.clone())
+        self.data.calendars.get(url).cloned()
     }
 }
 
@@ -270,7 +270,7 @@ mod tests {
     use url::Url;
 
     async fn populate_cache(cache_path: &Path) -> Cache {
-        let mut cache = Cache::new(&cache_path);
+        let mut cache = Cache::new(cache_path);
 
         let _shopping_list = cache
             .create_calendar(
@@ -329,7 +329,7 @@ mod tests {
         assert_eq!(cache.backing_folder, retrieved_cache.backing_folder);
         let test = cache.has_same_observable_content_as(&retrieved_cache).await;
         println!("Equal? {:?}", test);
-        assert_eq!(test.unwrap(), true);
+        assert!(test.unwrap());
     }
 
     #[tokio::test]

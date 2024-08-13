@@ -33,7 +33,7 @@ pub fn parse(
 
     let ical_prod_id = extract_ical_prod_id(&parsed_item)
         .map(|s| s.to_string())
-        .unwrap_or_else(|| super::default_prod_id());
+        .unwrap_or_else(super::default_prod_id);
 
     let item = match assert_single_type(&parsed_item)? {
         CurrentType::Event(_) => Item::Event(Event::new()),
@@ -82,7 +82,7 @@ pub fn parse(
                         //   "COMPLETED"    ;Indicates to-do completed.
                         //   "IN-PROCESS"   ;Indicates to-do in process of.
                         //   "CANCELLED"    ;Indicates to-do was cancelled.
-                        if prop.value.as_ref().map(|s| s.as_str()) == Some("COMPLETED") {
+                        if prop.value.as_deref() == Some("COMPLETED") {
                             completed = true;
                         }
                     }
@@ -161,7 +161,7 @@ fn parse_date_time_from_property(value: &Option<String>) -> Option<DateTime<Utc>
 fn extract_ical_prod_id(item: &IcalCalendar) -> Option<&str> {
     for prop in &item.properties {
         if &prop.name == "PRODID" {
-            return prop.value.as_ref().map(|s| s.as_str());
+            return prop.value.as_deref();
         }
     }
     None
@@ -172,7 +172,7 @@ enum CurrentType<'a> {
     Todo(&'a IcalTodo),
 }
 
-fn assert_single_type<'a>(item: &'a IcalCalendar) -> Result<CurrentType<'a>, Box<dyn Error>> {
+fn assert_single_type(item: &IcalCalendar) -> Result<CurrentType<'_>, Box<dyn Error>> {
     let n_events = item.events.len();
     let n_todos = item.todos.len();
     let n_journals = item.journals.len();
@@ -193,7 +193,7 @@ fn assert_single_type<'a>(item: &'a IcalCalendar) -> Result<CurrentType<'a>, Box
         }
     }
 
-    return Err("Only a single TODO or a single EVENT is supported".into());
+    Err("Only a single TODO or a single EVENT is supported".into())
 }
 
 #[cfg(test)]
@@ -281,12 +281,12 @@ END:VCALENDAR
             task.uid(),
             "0633de27-8c32-42be-bcb8-63bc879c6185@some-domain.com"
         );
-        assert_eq!(task.completed(), false);
+        assert!(!task.completed());
         assert_eq!(task.completion_status(), &CompletionStatus::Uncompleted);
         assert_eq!(task.sync_status(), &sync_status);
         assert_eq!(
             task.last_modified(),
-            &Utc.ymd(2021, 03, 21).and_hms(0, 16, 0)
+            &Utc.ymd(2021, 3, 21).and_hms(0, 16, 0)
         );
     }
 
@@ -304,10 +304,10 @@ END:VCALENDAR
         .unwrap();
         let task = item.unwrap_task();
 
-        assert_eq!(task.completed(), true);
+        assert!(task.completed());
         assert_eq!(
             task.completion_status(),
-            &CompletionStatus::Completed(Some(Utc.ymd(2021, 04, 02).and_hms(8, 15, 57)))
+            &CompletionStatus::Completed(Some(Utc.ymd(2021, 4, 2).and_hms(8, 15, 57)))
         );
     }
 
@@ -325,7 +325,7 @@ END:VCALENDAR
         .unwrap();
         let task = item.unwrap_task();
 
-        assert_eq!(task.completed(), true);
+        assert!(task.completed());
         assert_eq!(task.completion_status(), &CompletionStatus::Completed(None));
     }
 

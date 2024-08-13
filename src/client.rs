@@ -65,7 +65,7 @@ pub(crate) async fn sub_request(
         .send()
         .await?;
 
-    if res.status().is_success() == false {
+    if !res.status().is_success() {
         return Err(format!("Unexpected HTTP status code {:?}", res.status()).into());
     }
 
@@ -82,7 +82,7 @@ pub(crate) async fn sub_request_and_extract_elem(
 
     let mut current_element: &Element = &text.parse()?;
     for item in items {
-        current_element = match find_elem(&current_element, item) {
+        current_element = match find_elem(current_element, item) {
             Some(elem) => elem,
             None => return Err(format!("missing element {}", item).into()),
         }
@@ -99,7 +99,7 @@ pub(crate) async fn sub_request_and_extract_elems(
     let text = sub_request(resource, method, body, 1).await?;
 
     let element: &Element = &text.parse()?;
-    Ok(find_elems(&element, item)
+    Ok(find_elems(element, item)
         .iter()
         .map(|elem| (*elem).clone())
         .collect())
@@ -153,7 +153,7 @@ impl Client {
         self.cached_replies.lock().unwrap().principal = Some(principal_url.clone());
         log::debug!("Principal URL is {}", href);
 
-        return Ok(principal_url);
+        Ok(principal_url)
     }
 
     /// Return the Homeset URL, or fetch it from server if not known yet
@@ -205,7 +205,7 @@ impl Client {
                     break;
                 }
             }
-            if found_calendar_type == false {
+            if !found_calendar_type {
                 continue;
             }
 
@@ -291,7 +291,7 @@ impl CalDavSource<RemoteCalendar> for Client {
             .calendars
             .as_ref()
             .and_then(|cals| cals.get(url))
-            .map(|cal| cal.clone())
+            .cloned()
     }
 
     async fn create_calendar(

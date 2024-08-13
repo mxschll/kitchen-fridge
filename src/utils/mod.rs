@@ -94,18 +94,15 @@ where
 }
 
 pub fn print_task(item: &Item) {
-    match item {
-        Item::Task(task) => {
-            let completion = if task.completed() { "✓" } else { " " };
-            let sync = match task.sync_status() {
-                SyncStatus::NotSynced => ".",
-                SyncStatus::Synced(_) => "=",
-                SyncStatus::LocallyModified(_) => "~",
-                SyncStatus::LocallyDeleted(_) => "x",
-            };
-            println!("    {}{} {}\t{}", completion, sync, task.name(), task.url());
-        }
-        _ => return,
+    if let Item::Task(task) = item {
+        let completion = if task.completed() { "✓" } else { " " };
+        let sync = match task.sync_status() {
+            SyncStatus::NotSynced => ".",
+            SyncStatus::Synced(_) => "=",
+            SyncStatus::LocallyModified(_) => "~",
+            SyncStatus::LocallyDeleted(_) => "x",
+        };
+        println!("    {}{} {}\t{}", completion, sync, task.name(), task.url());
     }
 }
 
@@ -122,7 +119,7 @@ where
     let keys_l: HashSet<T> = left.keys().cloned().collect();
     let keys_r: HashSet<T> = right.keys().cloned().collect();
     let result = keys_l == keys_r;
-    if result == false {
+    if !result {
         log::debug!("Keys of a map mismatch");
         for key in keys_l {
             log::debug!("   left: {}", key);

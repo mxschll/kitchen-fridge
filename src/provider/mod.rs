@@ -251,7 +251,7 @@ where
                     remote_additions.insert(url);
                 }
                 Some(local_item) => {
-                    if local_items_to_handle.remove(&url) == false {
+                    if !local_items_to_handle.remove(&url) {
                         progress.error(&format!(
                             "Inconsistent state: missing task {} from the local tasks",
                             url
@@ -531,7 +531,7 @@ where
     ) {
         progress.debug(&format!("> Applying a batch of {} locally", batch_type) /* too bad Chunks does not implement ExactSizeIterator, that could provide useful debug info. See https://github.com/rust-itertools/itertools/issues/171 */);
 
-        let list_of_additions: Vec<Url> = remote_additions.map(|url| url.clone()).collect();
+        let list_of_additions: Vec<Url> = remote_additions.collect();
         match cal_remote.get_items_by_url(&list_of_additions).await {
             Err(err) => {
                 progress.warn(&format!(
@@ -543,7 +543,7 @@ where
                 for item in items {
                     match item {
                         None => {
-                            progress.error(&format!("Inconsistency: an item from the batch has vanished from the remote end"));
+                            progress.error("Inconsistency: an item from the batch has vanished from the remote end");
                             continue;
                         }
                         Some(new_item) => {
@@ -567,8 +567,8 @@ where
                 }
 
                 // Notifying every item at the same time would not make sense. Let's notify only one of them
-                let one_item_name = match list_of_additions.get(0) {
-                    Some(url) => Self::item_name(&cal_local, &url).await,
+                let one_item_name = match list_of_additions.first() {
+                    Some(url) => Self::item_name(cal_local, url).await,
                     None => String::from("<unable to get the name of the first batched item>"),
                 };
                 progress.increment_counter(list_of_additions.len());
@@ -594,7 +594,7 @@ where
     N: BaseCalendar,
 {
     loop {
-        if let Some(cal) = haystack.get_calendar(&cal_url).await {
+        if let Some(cal) = haystack.get_calendar(cal_url).await {
             break Ok(cal);
         }
 
@@ -604,11 +604,8 @@ where
         let name = src.name().to_string();
         let supported_comps = src.supported_components();
         let color = src.color();
-        if let Err(err) = haystack
+        haystack
             .create_calendar(cal_url.clone(), name, supported_comps, color.cloned())
-            .await
-        {
-            return Err(err);
-        }
+            .await?;
     }
 }

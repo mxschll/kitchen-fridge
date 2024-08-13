@@ -26,8 +26,10 @@ pub fn build_from_task(task: &Task) -> Result<String, Box<dyn Error>> {
 
     let mut todo = ToDo::new(task.uid(), s_last_modified.clone());
 
-    task.creation_date()
-        .map(|dt| todo.push(Created::new(format_date_time(dt))));
+    if let Some(dt) = task.creation_date() {
+        todo.push(Created::new(format_date_time(dt)));
+    }
+
     todo.push(LastModified::new(s_last_modified));
     todo.push(Summary::new(task.name()));
 
@@ -37,9 +39,9 @@ pub fn build_from_task(task: &Task) -> Result<String, Box<dyn Error>> {
         }
         CompletionStatus::Completed(completion_date) => {
             todo.push(PercentComplete::new("100"));
-            completion_date
-                .as_ref()
-                .map(|dt| todo.push(Completed::new(format_date_time(dt))));
+            if let Some(dt) = completion_date.as_ref() {
+                todo.push(Completed::new(format_date_time(dt)));
+            }
             todo.push(Status::completed());
         }
     }
@@ -65,12 +67,12 @@ fn ical_to_ics_property(prop: IcalProperty) -> IcsProperty<'static> {
         Some(value) => IcsProperty::new(prop.name, value),
         None => IcsProperty::new(prop.name, ""),
     };
-    prop.params.map(|v| {
+    if let Some(v) = prop.params {
         for (key, vec_values) in v {
             let values = vec_values.join(";");
             ics_prop.add(IcsParameter::new(key, values));
         }
-    });
+    }
     ics_prop
 }
 

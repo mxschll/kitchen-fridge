@@ -117,22 +117,20 @@ fn decrement(value: &mut (u32, u32), descr: &str) -> Result<(), Box<dyn Error>> 
     let remaining_failures = value.1;
 
     if remaining_successes > 0 {
-        value.0 = value.0 - 1;
+        value.0 -= 1;
         log::debug!("Mock behaviour: allowing a {} ({:?})", descr, value);
         Ok(())
+    } else if remaining_failures > 0 {
+        value.1 -= 1;
+        log::debug!("Mock behaviour: failing a {} ({:?})", descr, value);
+        Err(format!(
+            "Mocked behaviour requires this {} to fail this time. ({:?})",
+            descr, value
+        )
+        .into())
     } else {
-        if remaining_failures > 0 {
-            value.1 = value.1 - 1;
-            log::debug!("Mock behaviour: failing a {} ({:?})", descr, value);
-            Err(format!(
-                "Mocked behaviour requires this {} to fail this time. ({:?})",
-                descr, value
-            )
-            .into())
-        } else {
-            log::debug!("Mock behaviour: allowing a {} ({:?})", descr, value);
-            Ok(())
-        }
+        log::debug!("Mock behaviour: allowing a {} ({:?})", descr, value);
+        Ok(())
     }
 }
 
