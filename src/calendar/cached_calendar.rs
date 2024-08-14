@@ -16,6 +16,14 @@ use crate::mock_behaviour::MockBehaviour;
 #[cfg(feature = "local_calendar_mocks_remote_calendars")]
 use std::sync::{Arc, Mutex};
 
+#[derive(thiserror::Error, Debug)]
+pub enum CachedCalendarError {
+    #[error("{detail}; item {url:?} already exists")]
+    ItemAlreadyExists { detail: String, url: Url },
+    #[error("{detail}; item {url:?} does not exist")]
+    ItemDoesNotExist { detail: String, url: Url },
+}
+
 /// A calendar used by the [`cache`](crate::cache) module
 ///
 /// Most of its functionality is provided by the async traits it implements.
@@ -111,10 +119,9 @@ impl CachedCalendar {
             return Ok(false);
         }
         for (url_l, item_l) in items_l {
-            let item_r = match items_r.get(&url_l) {
-                Some(c) => c,
-                None => return Err("should not happen, we've just tested keys are the same".into()),
-            };
+            let item_r = items_r
+                .get(&url_l)
+                .expect("should not happen, we've just tested keys are the same");
             if !item_l.has_same_observable_content_as(item_r) {
                 log::debug!("Different items for URL {}:", url_l);
                 log::debug!("{:#?}", item_l);
@@ -162,7 +169,11 @@ impl CachedCalendar {
     /// The non-async version of [`Self::add_item`]
     pub fn add_item_sync(&mut self, item: Item) -> Result<SyncStatus, Box<dyn Error>> {
         if self.items.contains_key(item.url()) {
-            return Err(format!("Item {:?} cannot be added, it exists already", item.url()).into());
+            return Err(CachedCalendarError::ItemAlreadyExists {
+                detail: format!("Item {:?} cannot be added", item.url()),
+                url: item.url().clone(),
+            }
+            .into());
         }
         #[cfg(not(feature = "local_calendar_mocks_remote_calendars"))]
         return self.regular_add_or_update_item(item);
@@ -174,10 +185,10 @@ impl CachedCalendar {
     /// The non-async version of [`Self::update_item`]
     pub fn update_item_sync(&mut self, item: Item) -> Result<SyncStatus, Box<dyn Error>> {
         if !self.items.contains_key(item.url()) {
-            return Err(format!(
-                "Item {:?} cannot be updated, it does not already exist",
-                item.url()
-            )
+            return Err(CachedCalendarError::ItemDoesNotExist {
+                detail: "Item cannot be updated".into(),
+                url: item.url().clone(),
+            }
             .into());
         }
         #[cfg(not(feature = "local_calendar_mocks_remote_calendars"))]
@@ -190,7 +201,11 @@ impl CachedCalendar {
     /// The non-async version of [`Self::mark_for_deletion`]
     pub fn mark_for_deletion_sync(&mut self, item_url: &Url) -> Result<(), Box<dyn Error>> {
         match self.items.get_mut(item_url) {
-            None => Err("no item for this key".into()),
+            None => Err(CachedCalendarError::ItemDoesNotExist {
+                detail: "Can't mark item for deletion".into(),
+                url: item_url.clone(),
+            }
+            .into()),
             Some(item) => {
                 match item.sync_status() {
                     SyncStatus::Synced(prev_ss) => {
@@ -218,7 +233,11 @@ impl CachedCalendar {
     /// The non-async version of [`Self::immediately_delete_item`]
     pub fn immediately_delete_item_sync(&mut self, item_url: &Url) -> Result<(), Box<dyn Error>> {
         match self.items.remove(item_url) {
-            None => Err(format!("Item {} is absent from this calendar", item_url).into()),
+            None => Err(CachedCalendarError::ItemDoesNotExist {
+                detail: "Can't immediately delete item".into(),
+                url: item_url.clone(),
+            }
+            .into()),
             Some(_) => Ok(()),
         }
     }
