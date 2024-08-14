@@ -4,6 +4,8 @@ use std::sync::Mutex;
 
 use async_trait::async_trait;
 use csscolorparser::Color;
+use reqwest::header::HeaderMap;
+use reqwest::StatusCode;
 use reqwest::{header::CONTENT_LENGTH, header::CONTENT_TYPE};
 use url::Url;
 
@@ -38,6 +40,27 @@ static MULTIGET_BODY_PREFIX: &str = r#"
 static MULTIGET_BODY_SUFFIX: &str = r#"
     </c:calendar-multiget>
 "#;
+
+#[derive(thiserror::Error, Debug)]
+pub enum RemoteCalendarError {
+    #[error("Cannot update an item that has not been synced already")]
+    CannotUpdateUnsyncedItem,
+
+    #[error("Cannot update an item that has not changed")]
+    CannotUpdateUnchangedItem,
+
+    #[error("Unexpected HTTP status code {0:?}")]
+    UnexpectedHTTPStatusCode(StatusCode),
+
+    #[error("Inconsistent data: {0} has no version tag")]
+    ItemLacksVersionTag(Url),
+
+    #[error("No ETag in these response headers: {response_headers:?} (request was {url:?})")]
+    NoETag {
+        url: Url,
+        response_headers: HeaderMap,
+    },
+}
 
 /// A CalDAV calendar created by a [`Client`](crate::client::Client).
 #[derive(Debug)]
@@ -79,16 +102,15 @@ impl BaseCalendar for RemoteCalendar {
             .await?;
 
         if !response.status().is_success() {
-            return Err(format!("Unexpected HTTP status code {:?}", response.status()).into());
+            return Err(RemoteCalendarError::UnexpectedHTTPStatusCode(response.status()).into());
         }
 
         let reply_hdrs = response.headers();
         match reply_hdrs.get("ETag") {
-            None => Err(format!(
-                "No ETag in these response headers: {:?} (request was {:?})",
-                reply_hdrs,
-                item.url()
-            )
+            None => Err(RemoteCalendarError::NoETag {
+                url: item.url().clone(),
+                response_headers: reply_hdrs.clone(),
+            }
             .into()),
             Some(etag) => {
                 let vtag_str = etag.to_str()?;
@@ -101,10 +123,10 @@ impl BaseCalendar for RemoteCalendar {
     async fn update_item(&mut self, item: Item) -> Result<SyncStatus, Box<dyn Error>> {
         let old_etag = match item.sync_status() {
             SyncStatus::NotSynced => {
-                return Err("Cannot update an item that has not been synced already".into())
+                return Err(RemoteCalendarError::CannotUpdateUnsyncedItem.into())
             }
             SyncStatus::Synced(_) => {
-                return Err("Cannot update an item that has not changed".into())
+                return Err(RemoteCalendarError::CannotUpdateUnchangedItem.into())
             }
             SyncStatus::LocallyModified(etag) => etag,
             SyncStatus::LocallyDeleted(etag) => etag,
@@ -122,16 +144,15 @@ impl BaseCalendar for RemoteCalendar {
             .await?;
 
         if !request.status().is_success() {
-            return Err(format!("Unexpected HTTP status code {:?}", request.status()).into());
+            return Err(RemoteCalendarError::UnexpectedHTTPStatusCode(request.status()).into());
         }
 
         let reply_hdrs = request.headers();
         match reply_hdrs.get("ETag") {
-            None => Err(format!(
-                "No ETag in these response headers: {:?} (request was {:?})",
-                reply_hdrs,
-                item.url()
-            )
+            None => Err(RemoteCalendarError::NoETag {
+                url: item.url().clone(),
+                response_headers: reply_hdrs.clone(),
+            }
             .into()),
             Some(etag) => {
                 let vtag_str = etag.to_str()?;
@@ -210,7 +231,7 @@ impl DavCalendar for RemoteCalendar {
             .await?;
 
         if !res.status().is_success() {
-            return Err(format!("Unexpected HTTP status code {:?}", res.status()).into());
+            return Err(RemoteCalendarError::UnexpectedHTTPStatusCode(res.status()).into());
         }
 
         let text = res.text().await?;
@@ -218,7 +239,7 @@ impl DavCalendar for RemoteCalendar {
         // This is supposed to be cached
         let version_tags = self.get_item_version_tags().await?;
         let vt = match version_tags.get(url) {
-            None => return Err(format!("Inconsistent data: {} has no version tag", url).into()),
+            None => return Err(RemoteCalendarError::ItemLacksVersionTag(url.clone()).into()),
             Some(vt) => vt,
         };
 
@@ -257,7 +278,7 @@ impl DavCalendar for RemoteCalendar {
                 .text();
 
             let vt = match version_tags.get(&url) {
-                None => return Err(format!("Inconsistent data: {} has no version tag", url).into()),
+                None => return Err(RemoteCalendarError::ItemLacksVersionTag(url.clone()).into()),
                 Some(vt) => vt,
             };
 
@@ -276,7 +297,9 @@ impl DavCalendar for RemoteCalendar {
             .await?;
 
         if !del_response.status().is_success() {
-            return Err(format!("Unexpected HTTP status code {:?}", del_response.status()).into());
+            return Err(
+                RemoteCalendarError::UnexpectedHTTPStatusCode(del_response.status()).into(),
+            );
         }
 
         Ok(())
