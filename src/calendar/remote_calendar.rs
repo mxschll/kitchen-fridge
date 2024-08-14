@@ -5,11 +5,11 @@ use std::sync::Mutex;
 use async_trait::async_trait;
 use csscolorparser::Color;
 use reqwest::header::HeaderMap;
-use reqwest::StatusCode;
 use reqwest::{header::CONTENT_LENGTH, header::CONTENT_TYPE};
 use url::Url;
 
 use crate::calendar::SupportedComponents;
+use crate::error::{HttpStatusConstraint, KFError};
 use crate::item::Item;
 use crate::item::SyncStatus;
 use crate::item::VersionTag;
@@ -48,9 +48,6 @@ pub enum RemoteCalendarError {
 
     #[error("Cannot update an item that has not changed")]
     CannotUpdateUnchangedItem,
-
-    #[error("Unexpected HTTP status code {0:?}")]
-    UnexpectedHTTPStatusCode(StatusCode),
 
     #[error("Inconsistent data: {0} has no version tag")]
     ItemLacksVersionTag(Url),
@@ -102,7 +99,11 @@ impl BaseCalendar for RemoteCalendar {
             .await?;
 
         if !response.status().is_success() {
-            return Err(RemoteCalendarError::UnexpectedHTTPStatusCode(response.status()).into());
+            return Err(KFError::UnexpectedHTTPStatusCode {
+                expected: HttpStatusConstraint::Success,
+                got: response.status(),
+            }
+            .into());
         }
 
         let reply_hdrs = response.headers();
@@ -144,7 +145,11 @@ impl BaseCalendar for RemoteCalendar {
             .await?;
 
         if !request.status().is_success() {
-            return Err(RemoteCalendarError::UnexpectedHTTPStatusCode(request.status()).into());
+            return Err(KFError::UnexpectedHTTPStatusCode {
+                expected: HttpStatusConstraint::Success,
+                got: request.status(),
+            }
+            .into());
         }
 
         let reply_hdrs = request.headers();
@@ -231,7 +236,11 @@ impl DavCalendar for RemoteCalendar {
             .await?;
 
         if !res.status().is_success() {
-            return Err(RemoteCalendarError::UnexpectedHTTPStatusCode(res.status()).into());
+            return Err(KFError::UnexpectedHTTPStatusCode {
+                expected: HttpStatusConstraint::Success,
+                got: res.status(),
+            }
+            .into());
         }
 
         let text = res.text().await?;
@@ -297,9 +306,11 @@ impl DavCalendar for RemoteCalendar {
             .await?;
 
         if !del_response.status().is_success() {
-            return Err(
-                RemoteCalendarError::UnexpectedHTTPStatusCode(del_response.status()).into(),
-            );
+            return Err(KFError::UnexpectedHTTPStatusCode {
+                expected: HttpStatusConstraint::Success,
+                got: del_response.status(),
+            }
+            .into());
         }
 
         Ok(())

@@ -14,6 +14,8 @@ use url::Url;
 
 use crate::calendar::remote_calendar::RemoteCalendar;
 use crate::calendar::SupportedComponents;
+use crate::error::{HttpStatusConstraint, KFError};
+use crate::item::ItemType;
 use crate::resource::Resource;
 use crate::traits::BaseCalendar;
 use crate::traits::CalDavSource;
@@ -66,13 +68,22 @@ pub(crate) async fn sub_request(
         .await?;
 
     if !res.status().is_success() {
-        return Err(format!("Unexpected HTTP status code {:?}", res.status()).into());
+        return Err(KFError::UnexpectedHTTPStatusCode {
+            expected: HttpStatusConstraint::Success,
+            got: res.status(),
+        }
+        .into());
     }
 
     let text = res.text().await?;
     Ok(text)
 }
 
+#[derive(thiserror::Error, Debug)]
+pub enum SubRequestAndExtractElemError {
+    #[error("missing element {0}")]
+    MissingElement(String),
+}
 pub(crate) async fn sub_request_and_extract_elem(
     resource: &Resource,
     body: String,
@@ -84,7 +95,9 @@ pub(crate) async fn sub_request_and_extract_elem(
     for item in items {
         current_element = match find_elem(current_element, item) {
             Some(elem) => elem,
-            None => return Err(format!("missing element {}", item).into()),
+            None => {
+                return Err(SubRequestAndExtractElemError::MissingElement(item.to_string()).into())
+            }
         }
     }
     Ok(current_element.text())
@@ -273,10 +286,14 @@ impl CalDavSource<RemoteCalendar> for Client {
     ) -> Result<HashMap<Url, Arc<Mutex<RemoteCalendar>>>, Box<dyn Error>> {
         self.populate_calendars().await?;
 
-        match &self.cached_replies.lock().unwrap().calendars {
-            Some(cals) => return Ok(cals.clone()),
-            None => return Err("No calendars available".into()),
-        };
+        Ok(self
+            .cached_replies
+            .lock()
+            .unwrap()
+            .calendars
+            .as_ref()
+            .unwrap() // Unwrap OK because populate_calendars either does what it says, or returns Err
+            .clone())
     }
 
     async fn get_calendar(&self, url: &Url) -> Option<Arc<Mutex<RemoteCalendar>>> {
@@ -303,13 +320,22 @@ impl CalDavSource<RemoteCalendar> for Client {
     ) -> Result<Arc<Mutex<RemoteCalendar>>, Box<dyn Error>> {
         self.populate_calendars().await?;
 
-        match self.cached_replies.lock().unwrap().calendars.as_ref() {
-            None => return Err("No calendars have been fetched".into()),
-            Some(cals) => {
-                if cals.contains_key(&url) {
-                    return Err("This calendar already exists".into());
-                }
+        let cals = self
+            .cached_replies
+            .lock()
+            .unwrap()
+            .calendars
+            .as_ref()
+            .unwrap()
+            .clone();
+
+        if cals.contains_key(&url) {
+            return Err(KFError::ItemAlreadyExists {
+                type_: ItemType::Calendar,
+                detail: "".into(),
+                url,
             }
+            .into());
         }
 
         let creation_body = calendar_body(name, supported_components, color);
@@ -324,10 +350,10 @@ impl CalDavSource<RemoteCalendar> for Client {
 
         let status = response.status();
         if status != StatusCode::CREATED {
-            return Err(format!(
-                "Unexpected HTTP status code. Expected CREATED, got {}",
-                status.as_u16()
-            )
+            return Err(KFError::UnexpectedHTTPStatusCode {
+                expected: HttpStatusConstraint::Specific(StatusCode::CREATED),
+                got: status,
+            }
             .into());
         }
 

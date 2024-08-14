@@ -4,6 +4,7 @@ use std::error::Error;
 
 use chrono::{DateTime, TimeZone, Utc};
 use ical::parser::ical::component::{IcalCalendar, IcalEvent, IcalTodo};
+use ical::parser::ParserError;
 use url::Url;
 
 use crate::item::SyncStatus;
@@ -11,6 +12,35 @@ use crate::task::CompletionStatus;
 use crate::Event;
 use crate::Item;
 use crate::Task;
+
+/// FIXME Some of these errors are hard to tell apart
+#[derive(thiserror::Error, Debug)]
+pub enum IcalParseError {
+    #[error("Item has more than a single item of a single type: #events {n_events} #todos #{n_todos} #journals #{n_journals}")]
+    ItemNotOfSingleType {
+        n_events: usize,
+        n_todos: usize,
+        n_journals: usize,
+    },
+
+    #[error("Invalid iCal data to parse for item {item_url}")]
+    InvalidData { item_url: Url },
+
+    #[error("Missing DTSTAMP for item {item_url}, but this is required by RFC5545")]
+    MissingDtstamp { item_url: Url },
+
+    #[error("Missing name for item {item_url}")]
+    MissingName { item_url: Url },
+
+    #[error("Missing UID for item {item_url}")]
+    MissingUid { item_url: Url },
+
+    #[error("Parsing multiple items are not supported")]
+    MultipleItems,
+
+    #[error("Unable to parseiCal data for item {item_url}: {source}")]
+    UnableToParse { item_url: Url, source: ParserError },
+}
 
 /// Parse an iCal file into the internal representation [`crate::Item`]
 pub fn parse(
@@ -20,12 +50,14 @@ pub fn parse(
 ) -> Result<Item, Box<dyn Error>> {
     let mut reader = ical::IcalParser::new(content.as_bytes());
     let parsed_item = match reader.next() {
-        None => return Err(format!("Invalid iCal data to parse for item {}", item_url).into()),
+        None => return Err(IcalParseError::InvalidData { item_url }.into()),
         Some(item) => match item {
             Err(err) => {
-                return Err(
-                    format!("Unable to parse iCal data for item {}: {}", item_url, err).into(),
-                )
+                return Err(IcalParseError::UnableToParse {
+                    item_url,
+                    source: err,
+                }
+                .into())
             }
             Ok(item) => item,
         },
@@ -94,21 +126,15 @@ pub fn parse(
             }
             let name = match name {
                 Some(name) => name,
-                None => return Err(format!("Missing name for item {}", item_url).into()),
+                None => return Err(IcalParseError::MissingName { item_url }.into()),
             };
             let uid = match uid {
                 Some(uid) => uid,
-                None => return Err(format!("Missing UID for item {}", item_url).into()),
+                None => return Err(IcalParseError::MissingUid { item_url }.into()),
             };
             let last_modified = match last_modified {
                 Some(dt) => dt,
-                None => {
-                    return Err(format!(
-                        "Missing DTSTAMP for item {}, but this is required by RFC5545",
-                        item_url
-                    )
-                    .into())
-                }
+                None => return Err(IcalParseError::MissingDtstamp { item_url }.into()),
             };
             let completion_status = match completed {
                 false => {
@@ -136,7 +162,7 @@ pub fn parse(
 
     // What to do with multiple items?
     if reader.next().map(|r| r.is_ok()) == Some(true) {
-        return Err("Parsing multiple items are not supported".into());
+        return Err(IcalParseError::MultipleItems.into());
     }
 
     Ok(item)
@@ -179,7 +205,12 @@ fn assert_single_type(item: &IcalCalendar) -> Result<CurrentType<'_>, Box<dyn Er
 
     if n_events == 1 {
         if n_todos != 0 || n_journals != 0 {
-            return Err("Only a single TODO or a single EVENT is supported".into());
+            return Err(IcalParseError::ItemNotOfSingleType {
+                n_events,
+                n_todos,
+                n_journals,
+            }
+            .into());
         } else {
             return Ok(CurrentType::Event(&item.events[0]));
         }
@@ -187,13 +218,23 @@ fn assert_single_type(item: &IcalCalendar) -> Result<CurrentType<'_>, Box<dyn Er
 
     if n_todos == 1 {
         if n_events != 0 || n_journals != 0 {
-            return Err("Only a single TODO or a single EVENT is supported".into());
+            return Err(IcalParseError::ItemNotOfSingleType {
+                n_events,
+                n_todos,
+                n_journals,
+            }
+            .into());
         } else {
             return Ok(CurrentType::Todo(&item.todos[0]));
         }
     }
 
-    Err("Only a single TODO or a single EVENT is supported".into())
+    Err(IcalParseError::ItemNotOfSingleType {
+        n_events,
+        n_todos,
+        n_journals,
+    }
+    .into())
 }
 
 #[cfg(test)]

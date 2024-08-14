@@ -10,6 +10,14 @@ use serde::{Deserialize, Serialize};
 
 use bitflags::bitflags;
 
+#[derive(thiserror::Error, Debug)]
+pub enum SupportedComponentsError {
+    #[error(
+        "Element must be a <supported-calendar-component-set> but got <{element_name}> instead"
+    )]
+    ElementMustBeSupportedCalendarComponent { element_name: String },
+}
+
 bitflags! {
     #[derive(Serialize, Deserialize)]
     pub struct SupportedComponents: u8 {
@@ -48,7 +56,12 @@ impl TryFrom<minidom::Element> for SupportedComponents {
     /// Create an instance from an XML <supported-calendar-component-set> element
     fn try_from(element: minidom::Element) -> Result<Self, Self::Error> {
         if element.name() != "supported-calendar-component-set" {
-            return Err("Element must be a <supported-calendar-component-set>".into());
+            return Err(
+                SupportedComponentsError::ElementMustBeSupportedCalendarComponent {
+                    element_name: element.name().to_string(),
+                }
+                .into(),
+            );
         }
 
         let mut flags = Self::empty();

@@ -5,6 +5,13 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use url::Url;
 
+#[derive(Debug)]
+pub enum ItemType {
+    Calendar,
+    Event,
+    Task,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum Item {
     Event(crate::event::Event),
@@ -75,6 +82,13 @@ impl Item {
             (Item::Event(s), Item::Event(o)) => s.has_same_observable_content_as(o),
             (Item::Task(s), Item::Task(o)) => s.has_same_observable_content_as(o),
             _ => false,
+        }
+    }
+
+    pub fn type_(&self) -> ItemType {
+        match self {
+            Self::Event(_) => ItemType::Event,
+            Self::Task(_) => ItemType::Task,
         }
     }
 }

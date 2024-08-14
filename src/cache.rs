@@ -14,6 +14,8 @@ use url::Url;
 
 use crate::calendar::cached_calendar::CachedCalendar;
 use crate::calendar::SupportedComponents;
+use crate::error::KFError;
+use crate::item::ItemType;
 use crate::traits::BaseCalendar;
 use crate::traits::CalDavSource;
 use crate::traits::CompleteCalendar;
@@ -22,6 +24,12 @@ use crate::traits::CompleteCalendar;
 use crate::mock_behaviour::MockBehaviour;
 
 const MAIN_FILE: &str = "data.json";
+
+#[derive(thiserror::Error, Debug)]
+pub enum CacheError {
+    #[error("Unable to open file {path:?}: {err}")]
+    UnableToOpenFile { path: PathBuf, err: std::io::Error },
+}
 
 /// A CalDAV source that stores its items in a local folder.
 ///
@@ -64,7 +72,11 @@ impl Cache {
         let main_file = folder.join(MAIN_FILE);
         let mut data: CachedData = match std::fs::File::open(&main_file) {
             Err(err) => {
-                return Err(format!("Unable to open file {:?}: {}", main_file, err).into());
+                return Err(CacheError::UnableToOpenFile {
+                    path: main_file,
+                    err,
+                }
+                .into());
             }
             Ok(file) => serde_json::from_reader(file)?,
         };
@@ -166,10 +178,11 @@ impl Cache {
         for (calendar_url, cal_l) in calendars_l {
             log::debug!("Comparing calendars {}", calendar_url);
             let cal_l = cal_l.lock().unwrap();
-            let cal_r = match calendars_r.get(&calendar_url) {
-                Some(c) => c.lock().unwrap(),
-                None => return Err("should not happen, we've just tested keys are the same".into()),
-            };
+            let cal_r = calendars_r
+                .get(&calendar_url)
+                .expect("should not happen, we've just tested keys are the same")
+                .lock()
+                .unwrap();
 
             // TODO: check calendars have the same names/ID/whatever
             if !(cal_l.has_same_observable_content_as(&cal_r).await?) {
@@ -251,10 +264,13 @@ impl CalDavSource<CachedCalendar> for Cache {
                 .set_mock_behaviour(Some(Arc::clone(behaviour)));
         };
 
-        match self.data.calendars.insert(url, arc.clone()) {
-            Some(_) => {
-                Err("Attempt to insert calendar failed: there is alredy such a calendar.".into())
+        match self.data.calendars.insert(url.clone(), arc.clone()) {
+            Some(_) => Err(KFError::ItemAlreadyExists {
+                type_: ItemType::Calendar,
+                detail: "Attempt to insert calendar failed".into(),
+                url,
             }
+            .into()),
             None => Ok(arc),
         }
     }
