@@ -238,6 +238,10 @@ impl CachedCalendar {
             Some(_) => Ok(()),
         }
     }
+
+    pub fn set_name<S: ToString>(&mut self, name: S) {
+        self.name = name.to_string();
+    }
 }
 
 #[async_trait]
