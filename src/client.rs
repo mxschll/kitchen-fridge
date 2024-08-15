@@ -170,7 +170,7 @@ impl Client {
     }
 
     /// Return the Homeset URL, or fetch it from server if not known yet
-    async fn get_cal_home_set(&self) -> Result<Resource, Box<dyn Error>> {
+    pub async fn get_cal_home_set(&self) -> Result<Resource, Box<dyn Error>> {
         if let Some(h) = &self.cached_replies.lock().unwrap().calendar_home_set {
             return Ok(h.clone());
         }
