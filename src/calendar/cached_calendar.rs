@@ -184,7 +184,7 @@ impl CachedCalendar {
     }
 
     /// The non-async version of [`Self::mark_for_deletion`]
-    pub fn mark_for_deletion_sync(&mut self, item_url: &Url) -> KFResult<()> {
+    pub fn mark_item_for_deletion_sync(&mut self, item_url: &Url) -> KFResult<()> {
         match self.items.get_mut(item_url) {
             None => Err(KFError::ItemDoesNotExist {
                 type_: None,
@@ -298,8 +298,8 @@ impl CompleteCalendar for CachedCalendar {
         self.get_item_by_url_mut_sync(url)
     }
 
-    async fn mark_for_deletion(&mut self, item_url: &Url) -> KFResult<()> {
-        self.mark_for_deletion_sync(item_url)
+    async fn mark_item_for_deletion(&mut self, item_url: &Url) -> KFResult<()> {
+        self.mark_item_for_deletion_sync(item_url)
     }
 
     async fn immediately_delete_item(&mut self, item_url: &Url) -> KFResult<()> {

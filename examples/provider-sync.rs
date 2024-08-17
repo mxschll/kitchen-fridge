@@ -158,7 +158,7 @@ async fn remove_items_and_sync_again(
         .unwrap()
         .lock()
         .unwrap()
-        .mark_for_deletion(id_to_remove)
+        .mark_item_for_deletion(id_to_remove)
         .await
         .unwrap();
 

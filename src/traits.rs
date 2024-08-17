@@ -149,7 +149,7 @@ pub trait CompleteCalendar: BaseCalendar {
     /// Mark an item for deletion.
     /// This is required so that the upcoming sync will know it should also also delete this task from the server
     /// (and then call [`CompleteCalendar::immediately_delete_item`] once it has been successfully deleted on the server)
-    async fn mark_for_deletion(&mut self, item_id: &Url) -> KFResult<()>;
+    async fn mark_item_for_deletion(&mut self, item_id: &Url) -> KFResult<()>;
 
     /// Immediately remove an item. See [`CompleteCalendar::mark_for_deletion`]
     async fn immediately_delete_item(&mut self, item_id: &Url) -> KFResult<()>;

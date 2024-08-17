@@ -812,7 +812,7 @@ async fn apply_changes_on_an_existing_item<S, C>(
         }
         ChangeToApply::Remove => {
             match is_remote {
-                false => cal.mark_for_deletion(item_url).await.unwrap(),
+                false => cal.mark_item_for_deletion(item_url).await.unwrap(),
                 true => cal.delete_item(item_url).await.unwrap(),
             };
         }
