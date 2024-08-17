@@ -2,7 +2,6 @@
 
 use std::collections::HashMap;
 use std::convert::TryFrom;
-use std::error::Error;
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
@@ -55,7 +54,7 @@ pub(crate) async fn sub_request(
     method: &str,
     body: String,
     depth: u32,
-) -> Result<String, KFError> {
+) -> KFResult<String> {
     let method: Method = method.parse().expect("invalid method name");
 
     let url = resource.url();
@@ -156,7 +155,7 @@ impl Client {
         url: S,
         username: T,
         password: U,
-    ) -> Result<Self, Box<dyn Error>> {
+    ) -> Result<Self, url::ParseError> {
         let url = Url::parse(url.as_ref())?;
 
         Ok(Self {
@@ -166,7 +165,7 @@ impl Client {
     }
 
     /// Return the Principal URL, or fetch it from server if not known yet
-    async fn get_principal(&self) -> Result<Resource, KFError> {
+    async fn get_principal(&self) -> KFResult<Resource> {
         if let Some(p) = &self.cached_replies.lock().unwrap().principal {
             return Ok(p.clone());
         }
@@ -185,7 +184,7 @@ impl Client {
     }
 
     /// Return the Homeset URL, or fetch it from server if not known yet
-    pub async fn get_cal_home_set(&self) -> Result<Resource, KFError> {
+    pub async fn get_cal_home_set(&self) -> KFResult<Resource> {
         if let Some(h) = &self.cached_replies.lock().unwrap().calendar_home_set {
             return Ok(h.clone());
         }
@@ -204,7 +203,7 @@ impl Client {
         Ok(chs_url)
     }
 
-    async fn populate_calendars(&self) -> Result<(), KFError> {
+    async fn populate_calendars(&self) -> KFResult<()> {
         let cal_home_set = self.get_cal_home_set().await?;
 
         let reps = sub_request_and_extract_elems(
@@ -330,7 +329,7 @@ impl CalDavSource<RemoteCalendar> for Client {
         name: String,
         supported_components: SupportedComponents,
         color: Option<Color>,
-    ) -> Result<Arc<Mutex<RemoteCalendar>>, KFError> {
+    ) -> KFResult<Arc<Mutex<RemoteCalendar>>> {
         self.populate_calendars().await?;
 
         let cals = self

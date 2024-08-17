@@ -1,7 +1,7 @@
 use reqwest::StatusCode;
 use url::Url;
 
-use crate::{calendar::remote_calendar::RemoteCalendarError, item::ItemType};
+use crate::{calendar::remote_calendar::RemoteCalendarError, ical::IcalParseError, item::ItemType};
 
 #[derive(Debug)]
 pub enum HttpStatusConstraint {
@@ -34,6 +34,9 @@ pub enum KFError {
         method: http::Method,
         source: reqwest::Error,
     },
+
+    #[error("Error parsing ical data: {0}")]
+    IcalParseError(#[from] IcalParseError),
 
     #[error("{detail}; {type_:?} {url:?} already exists")]
     ItemAlreadyExists {

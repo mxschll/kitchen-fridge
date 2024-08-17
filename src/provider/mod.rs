@@ -3,7 +3,6 @@
 //! It is also responsible for syncing them together
 
 use std::collections::HashSet;
-use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::marker::PhantomData;
 use std::sync::{Arc, Mutex};
@@ -11,6 +10,7 @@ use std::sync::{Arc, Mutex};
 use itertools::Itertools;
 use url::Url;
 
+use crate::error::KFResult;
 use crate::item::SyncStatus;
 use crate::traits::CompleteCalendar;
 use crate::traits::{BaseCalendar, CalDavSource, DavCalendar};
@@ -131,7 +131,7 @@ where
         progress.is_success()
     }
 
-    async fn run_sync_inner(&mut self, progress: &mut SyncProgress) -> Result<(), Box<dyn Error>> {
+    async fn run_sync_inner(&mut self, progress: &mut SyncProgress) -> KFResult<()> {
         progress.info("Starting a sync.");
         progress.feedback(SyncEvent::Started);
 
@@ -197,14 +197,14 @@ where
         &mut self,
         cal_url: &Url,
         needle: Arc<Mutex<U>>,
-    ) -> Result<Arc<Mutex<T>>, Box<dyn Error>> {
+    ) -> KFResult<Arc<Mutex<T>>> {
         get_or_insert_counterpart_calendar("local", &mut self.local, cal_url, needle).await
     }
     async fn get_or_insert_remote_counterpart_calendar(
         &mut self,
         cal_url: &Url,
         needle: Arc<Mutex<T>>,
-    ) -> Result<Arc<Mutex<U>>, Box<dyn Error>> {
+    ) -> KFResult<Arc<Mutex<U>>> {
         get_or_insert_counterpart_calendar("remote", &mut self.remote, cal_url, needle).await
     }
 
@@ -212,7 +212,7 @@ where
         cal_local: Arc<Mutex<T>>,
         cal_remote: Arc<Mutex<U>>,
         progress: &mut SyncProgress,
-    ) -> Result<(), Box<dyn Error>> {
+    ) -> KFResult<()> {
         let mut cal_remote = cal_remote.lock().unwrap();
         let mut cal_local = cal_local.lock().unwrap();
         let cal_name = cal_local.name().to_string();
@@ -587,7 +587,7 @@ async fn get_or_insert_counterpart_calendar<H, N, I>(
     haystack: &mut H,
     cal_url: &Url,
     needle: Arc<Mutex<N>>,
-) -> Result<Arc<Mutex<I>>, Box<dyn Error>>
+) -> KFResult<Arc<Mutex<I>>>
 where
     H: CalDavSource<I>,
     I: BaseCalendar,

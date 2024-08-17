@@ -93,7 +93,7 @@ impl BaseCalendar for RemoteCalendar {
     }
 
     async fn add_item(&mut self, item: Item) -> KFResult<SyncStatus> {
-        let ical_text = crate::ical::build_from(&item)?;
+        let ical_text = crate::ical::build_from(&item);
 
         let response = reqwest::Client::new()
             .put(item.url().clone())
@@ -114,8 +114,7 @@ impl BaseCalendar for RemoteCalendar {
             return Err(KFError::UnexpectedHTTPStatusCode {
                 expected: HttpStatusConstraint::Success,
                 got: response.status(),
-            }
-            .into());
+            });
         }
 
         let reply_hdrs = response.headers();
@@ -149,7 +148,7 @@ impl BaseCalendar for RemoteCalendar {
             SyncStatus::LocallyModified(etag) => etag,
             SyncStatus::LocallyDeleted(etag) => etag,
         };
-        let ical_text = crate::ical::build_from(&item)?;
+        let ical_text = crate::ical::build_from(&item);
 
         let request = reqwest::Client::new()
             .put(item.url().clone())
@@ -170,8 +169,7 @@ impl BaseCalendar for RemoteCalendar {
             return Err(KFError::UnexpectedHTTPStatusCode {
                 expected: HttpStatusConstraint::Success,
                 got: request.status(),
-            }
-            .into());
+            });
         }
 
         let reply_hdrs = request.headers();

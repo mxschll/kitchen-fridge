@@ -1,7 +1,5 @@
 //! A module to parse ICal files
 
-use std::error::Error;
-
 use chrono::{DateTime, TimeZone, Utc};
 use ical::parser::ical::component::{IcalCalendar, IcalEvent, IcalTodo};
 use ical::parser::ParserError;
@@ -47,17 +45,16 @@ pub fn parse(
     content: &str,
     item_url: Url,
     sync_status: SyncStatus,
-) -> Result<Item, Box<dyn Error>> {
+) -> Result<Item, IcalParseError> {
     let mut reader = ical::IcalParser::new(content.as_bytes());
     let parsed_item = match reader.next() {
-        None => return Err(IcalParseError::InvalidData { item_url }.into()),
+        None => return Err(IcalParseError::InvalidData { item_url }),
         Some(item) => match item {
             Err(err) => {
                 return Err(IcalParseError::UnableToParse {
                     item_url,
                     source: err,
-                }
-                .into())
+                })
             }
             Ok(item) => item,
         },
@@ -126,15 +123,15 @@ pub fn parse(
             }
             let name = match name {
                 Some(name) => name,
-                None => return Err(IcalParseError::MissingName { item_url }.into()),
+                None => return Err(IcalParseError::MissingName { item_url }),
             };
             let uid = match uid {
                 Some(uid) => uid,
-                None => return Err(IcalParseError::MissingUid { item_url }.into()),
+                None => return Err(IcalParseError::MissingUid { item_url }),
             };
             let last_modified = match last_modified {
                 Some(dt) => dt,
-                None => return Err(IcalParseError::MissingDtstamp { item_url }.into()),
+                None => return Err(IcalParseError::MissingDtstamp { item_url }),
             };
             let completion_status = match completed {
                 false => {
@@ -162,7 +159,7 @@ pub fn parse(
 
     // What to do with multiple items?
     if reader.next().map(|r| r.is_ok()) == Some(true) {
-        return Err(IcalParseError::MultipleItems.into());
+        return Err(IcalParseError::MultipleItems);
     }
 
     Ok(item)
@@ -198,7 +195,7 @@ enum CurrentType<'a> {
     Todo(&'a IcalTodo),
 }
 
-fn assert_single_type(item: &IcalCalendar) -> Result<CurrentType<'_>, Box<dyn Error>> {
+fn assert_single_type(item: &IcalCalendar) -> Result<CurrentType<'_>, IcalParseError> {
     let n_events = item.events.len();
     let n_todos = item.todos.len();
     let n_journals = item.journals.len();
@@ -209,8 +206,7 @@ fn assert_single_type(item: &IcalCalendar) -> Result<CurrentType<'_>, Box<dyn Er
                 n_events,
                 n_todos,
                 n_journals,
-            }
-            .into());
+            });
         } else {
             return Ok(CurrentType::Event(&item.events[0]));
         }
@@ -222,8 +218,7 @@ fn assert_single_type(item: &IcalCalendar) -> Result<CurrentType<'_>, Box<dyn Er
                 n_events,
                 n_todos,
                 n_journals,
-            }
-            .into());
+            });
         } else {
             return Ok(CurrentType::Todo(&item.todos[0]));
         }
@@ -233,8 +228,7 @@ fn assert_single_type(item: &IcalCalendar) -> Result<CurrentType<'_>, Box<dyn Er
         n_events,
         n_todos,
         n_journals,
-    }
-    .into())
+    })
 }
 
 #[cfg(test)]

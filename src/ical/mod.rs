@@ -4,6 +4,7 @@
 
 mod parser;
 pub use parser::parse;
+pub use parser::IcalParseError;
 mod builder;
 pub use builder::build_from;
 
@@ -32,7 +33,7 @@ mod tests {
         let item_id = "http://item.id".parse().unwrap();
         let sync_status = SyncStatus::NotSynced;
         let deserialized = parse(&ical_with_unknown_fields, item_id, sync_status).unwrap();
-        let serialized = build_from(&deserialized).unwrap();
+        let serialized = build_from(&deserialized);
         assert_same_fields(&ical_with_unknown_fields, &serialized);
     }
 

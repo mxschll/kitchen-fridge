@@ -1,7 +1,5 @@
 //! A module to build ICal files
 
-use std::error::Error;
-
 use chrono::{DateTime, Utc};
 use ical::property::Property as IcalProperty;
 use ics::components::Parameter as IcsParameter;
@@ -14,14 +12,14 @@ use crate::task::CompletionStatus;
 use crate::Task;
 
 /// Create an iCal item from a `crate::item::Item`
-pub fn build_from(item: &Item) -> Result<String, Box<dyn Error>> {
+pub fn build_from(item: &Item) -> String {
     match item {
         Item::Task(t) => build_from_task(t),
         _ => unimplemented!(),
     }
 }
 
-pub fn build_from_task(task: &Task) -> Result<String, Box<dyn Error>> {
+pub fn build_from_task(task: &Task) -> String {
     let s_last_modified = format_date_time(task.last_modified());
 
     let mut todo = ToDo::new(task.uid(), s_last_modified.clone());
@@ -55,7 +53,7 @@ pub fn build_from_task(task: &Task) -> Result<String, Box<dyn Error>> {
     let mut calendar = ICalendar::new("2.0", task.ical_prod_id());
     calendar.add_todo(todo);
 
-    Ok(calendar.to_string())
+    calendar.to_string()
 }
 
 fn format_date_time(dt: &DateTime<Utc>) -> String {
@@ -152,7 +150,7 @@ mod tests {
             &cal_url,
         ));
 
-        let ical = build_from(&task).unwrap();
+        let ical = build_from(&task);
         (s_now, task.uid().to_string(), ical)
     }
 

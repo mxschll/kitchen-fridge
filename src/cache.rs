@@ -211,7 +211,7 @@ impl Drop for Cache {
 
 impl Cache {
     /// The non-async version of [`crate::traits::CalDavSource::get_calendars`]
-    pub fn get_calendars_sync(&self) -> Result<HashMap<Url, Arc<Mutex<CachedCalendar>>>, KFError> {
+    pub fn get_calendars_sync(&self) -> KFResult<HashMap<Url, Arc<Mutex<CachedCalendar>>>> {
         #[cfg(feature = "local_calendar_mocks_remote_calendars")]
         self.mock_behaviour
             .as_ref()
@@ -233,7 +233,7 @@ impl Cache {
 
 #[async_trait]
 impl CalDavSource<CachedCalendar> for Cache {
-    async fn get_calendars(&self) -> Result<HashMap<Url, Arc<Mutex<CachedCalendar>>>, KFError> {
+    async fn get_calendars(&self) -> KFResult<HashMap<Url, Arc<Mutex<CachedCalendar>>>> {
         self.get_calendars_sync()
     }
 
@@ -247,7 +247,7 @@ impl CalDavSource<CachedCalendar> for Cache {
         name: String,
         supported_components: SupportedComponents,
         color: Option<Color>,
-    ) -> Result<Arc<Mutex<CachedCalendar>>, KFError> {
+    ) -> KFResult<Arc<Mutex<CachedCalendar>>> {
         log::debug!("Inserting local calendar {}", url);
         #[cfg(feature = "local_calendar_mocks_remote_calendars")]
         self.mock_behaviour

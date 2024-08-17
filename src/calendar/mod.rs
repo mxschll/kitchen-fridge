@@ -4,7 +4,6 @@ pub mod cached_calendar;
 pub mod remote_calendar;
 
 use std::convert::TryFrom;
-use std::error::Error;
 
 use serde::{Deserialize, Serialize};
 
@@ -51,7 +50,7 @@ impl SupportedComponents {
 }
 
 impl TryFrom<minidom::Element> for SupportedComponents {
-    type Error = Box<dyn Error>;
+    type Error = SupportedComponentsError;
 
     /// Create an instance from an XML <supported-calendar-component-set> element
     fn try_from(element: minidom::Element) -> Result<Self, Self::Error> {
@@ -59,8 +58,7 @@ impl TryFrom<minidom::Element> for SupportedComponents {
             return Err(
                 SupportedComponentsError::ElementMustBeSupportedCalendarComponent {
                     element_name: element.name().to_string(),
-                }
-                .into(),
+                },
             );
         }
 

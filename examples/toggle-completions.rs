@@ -1,10 +1,9 @@
 //! This is an example of how kitchen-fridge can be used.
 //! This binary simply toggles all completion statuses of the tasks it finds.
 
-use std::error::Error;
-
 use chrono::Utc;
 
+use kitchen_fridge::error::KFResult;
 use kitchen_fridge::item::Item;
 use kitchen_fridge::task::CompletionStatus;
 use kitchen_fridge::utils::pause;
@@ -38,9 +37,7 @@ async fn main() {
         .unwrap();
 }
 
-async fn toggle_all_tasks_and_sync_again(
-    provider: &mut CalDavProvider,
-) -> Result<(), Box<dyn Error>> {
+async fn toggle_all_tasks_and_sync_again(provider: &mut CalDavProvider) -> KFResult<()> {
     let mut n_toggled = 0;
 
     for (_url, cal) in provider.local().get_calendars_sync()?.iter() {

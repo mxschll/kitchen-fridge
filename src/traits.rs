@@ -1,7 +1,6 @@
 //! Traits used by multiple structs in this crate
 
 use std::collections::{HashMap, HashSet};
-use std::error::Error;
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
