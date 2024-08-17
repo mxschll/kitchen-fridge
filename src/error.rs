@@ -49,8 +49,13 @@ pub enum KFError {
         url: Url,
     },
 
-    #[error("Missing DOM element {0}")]
-    MissingExpectedDOMElement(String),
+    #[error("Missing DOM element {el} in {text}")]
+    MissingDOMElement {
+        /// The text that should have contained the element
+        text: String,
+        /// The element
+        el: String,
+    },
 
     #[error("An error occurred while mocking behavior: {0}")]
     #[cfg(feature = "local_calendar_mocks_remote_calendars")]

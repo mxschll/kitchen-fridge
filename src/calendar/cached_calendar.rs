@@ -1,5 +1,4 @@
 use std::collections::{HashMap, HashSet};
-use std::error::Error;
 
 use async_trait::async_trait;
 use csscolorparser::Color;
@@ -365,7 +364,7 @@ impl DavCalendar for CachedCalendar {
         Ok(self.items.get(url).cloned())
     }
 
-    async fn get_items_by_url(&self, urls: &[Url]) -> Result<Vec<Option<Item>>, Box<dyn Error>> {
+    async fn get_items_by_url(&self, urls: &[Url]) -> KFResult<Vec<Option<Item>>> {
         let mut v = Vec::new();
         for url in urls {
             v.push(DavCalendar::get_item_by_url(self, url).await?);

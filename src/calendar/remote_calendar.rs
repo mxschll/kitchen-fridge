@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::error::Error;
 use std::sync::Mutex;
 
 use async_trait::async_trait;
@@ -296,7 +295,7 @@ impl DavCalendar for RemoteCalendar {
         Ok(Some(item))
     }
 
-    async fn get_items_by_url(&self, urls: &[Url]) -> Result<Vec<Option<Item>>, Box<dyn Error>> {
+    async fn get_items_by_url(&self, urls: &[Url]) -> KFResult<Vec<Option<Item>>> {
         // Build the request body
         let mut hrefs = String::new();
         for url in urls {
@@ -319,11 +318,19 @@ impl DavCalendar for RemoteCalendar {
         // Parse the results
         let mut results = Vec::new();
         for xml_reply in xml_replies {
-            let href = find_elem(&xml_reply, "href").ok_or("Missing HREF")?.text();
+            let href = find_elem(&xml_reply, "href")
+                .ok_or(KFError::MissingDOMElement {
+                    text: xml_reply.text().clone(),
+                    el: "href".into(),
+                })?
+                .text();
             let mut url = self.resource.url().clone();
             url.set_path(&href);
             let ical_data = find_elem(&xml_reply, "calendar-data")
-                .ok_or("Missing calendar-data")?
+                .ok_or(KFError::MissingDOMElement {
+                    text: xml_reply.text().clone(),
+                    el: "calendar-data".into(),
+                })?
                 .text();
 
             let vt = match version_tags.get(&url) {

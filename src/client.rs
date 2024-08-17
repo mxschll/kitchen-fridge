@@ -105,7 +105,12 @@ pub(crate) async fn sub_request_and_extract_elem(
     for item in items {
         current_element = match find_elem(current_element, item) {
             Some(elem) => elem,
-            None => return Err(KFError::MissingExpectedDOMElement(item.to_string())),
+            None => {
+                return Err(KFError::MissingDOMElement {
+                    text: current_element.text(),
+                    el: item.to_string(),
+                })
+            }
         }
     }
     Ok(current_element.text())
