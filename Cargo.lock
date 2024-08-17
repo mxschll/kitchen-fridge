@@ -446,6 +446,7 @@ dependencies = [
  "chrono",
  "csscolorparser",
  "env_logger",
+ "http",
  "ical-daladim",
  "ics",
  "itertools",

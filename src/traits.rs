@@ -9,6 +9,7 @@ use csscolorparser::Color;
 use url::Url;
 
 use crate::calendar::SupportedComponents;
+use crate::error::KFError;
 use crate::item::Item;
 use crate::item::SyncStatus;
 use crate::item::VersionTag;
@@ -31,7 +32,7 @@ pub trait CalDavSource<T: BaseCalendar> {
         name: String,
         supported_components: SupportedComponents,
         color: Option<Color>,
-    ) -> Result<Arc<Mutex<T>>, Box<dyn Error>>;
+    ) -> Result<Arc<Mutex<T>>, KFError>;
 
     // Removing a calendar is not supported yet
 }

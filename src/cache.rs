@@ -247,7 +247,7 @@ impl CalDavSource<CachedCalendar> for Cache {
         name: String,
         supported_components: SupportedComponents,
         color: Option<Color>,
-    ) -> Result<Arc<Mutex<CachedCalendar>>, Box<dyn Error>> {
+    ) -> Result<Arc<Mutex<CachedCalendar>>, KFError> {
         log::debug!("Inserting local calendar {}", url);
         #[cfg(feature = "local_calendar_mocks_remote_calendars")]
         self.mock_behaviour
@@ -269,8 +269,7 @@ impl CalDavSource<CachedCalendar> for Cache {
                 type_: ItemType::Calendar,
                 detail: "Attempt to insert calendar failed".into(),
                 url,
-            }
-            .into()),
+            }),
             None => Ok(arc),
         }
     }

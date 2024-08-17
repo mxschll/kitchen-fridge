@@ -55,49 +55,57 @@ pub(crate) async fn sub_request(
     method: &str,
     body: String,
     depth: u32,
-) -> Result<String, Box<dyn Error>> {
-    let method = method.parse().expect("invalid method name");
+) -> Result<String, KFError> {
+    let method: Method = method.parse().expect("invalid method name");
+
+    let url = resource.url();
 
     let res = reqwest::Client::new()
-        .request(method, resource.url().clone())
+        .request(method.clone(), url.clone())
         .header("Depth", depth)
         .header(CONTENT_TYPE, "application/xml")
         .basic_auth(resource.username(), Some(resource.password()))
         .body(body)
         .send()
-        .await?;
+        .await
+        .map_err(|source| KFError::HttpRequestError {
+            url: url.clone(),
+            method: method.clone(),
+            source,
+        })?;
 
     if !res.status().is_success() {
         return Err(KFError::UnexpectedHTTPStatusCode {
             expected: HttpStatusConstraint::Success,
             got: res.status(),
-        }
-        .into());
+        });
     }
 
-    let text = res.text().await?;
+    let text = res
+        .text()
+        .await
+        .map_err(|source| KFError::HttpRequestError {
+            url: url.clone(),
+            method,
+            source,
+        })?;
     Ok(text)
 }
 
-#[derive(thiserror::Error, Debug)]
-pub enum SubRequestAndExtractElemError {
-    #[error("missing element {0}")]
-    MissingElement(String),
-}
 pub(crate) async fn sub_request_and_extract_elem(
     resource: &Resource,
     body: String,
     items: &[&str],
-) -> Result<String, Box<dyn Error>> {
+) -> Result<String, KFError> {
     let text = sub_request(resource, "PROPFIND", body, 0).await?;
 
-    let mut current_element: &Element = &text.parse()?;
+    let mut current_element: &Element = &text
+        .parse()
+        .map_err(|source| KFError::DOMParseError { text, source })?;
     for item in items {
         current_element = match find_elem(current_element, item) {
             Some(elem) => elem,
-            None => {
-                return Err(SubRequestAndExtractElemError::MissingElement(item.to_string()).into())
-            }
+            None => return Err(KFError::MissingExpectedDOMElement(item.to_string())),
         }
     }
     Ok(current_element.text())
@@ -108,10 +116,12 @@ pub(crate) async fn sub_request_and_extract_elems(
     method: &str,
     body: String,
     item: &str,
-) -> Result<Vec<Element>, Box<dyn Error>> {
+) -> Result<Vec<Element>, KFError> {
     let text = sub_request(resource, method, body, 1).await?;
 
-    let element: &Element = &text.parse()?;
+    let element: &Element = &text
+        .parse()
+        .map_err(|source| KFError::DOMParseError { text, source })?;
     Ok(find_elems(element, item)
         .iter()
         .map(|elem| (*elem).clone())
@@ -151,7 +161,7 @@ impl Client {
     }
 
     /// Return the Principal URL, or fetch it from server if not known yet
-    async fn get_principal(&self) -> Result<Resource, Box<dyn Error>> {
+    async fn get_principal(&self) -> Result<Resource, KFError> {
         if let Some(p) = &self.cached_replies.lock().unwrap().principal {
             return Ok(p.clone());
         }
@@ -170,7 +180,7 @@ impl Client {
     }
 
     /// Return the Homeset URL, or fetch it from server if not known yet
-    pub async fn get_cal_home_set(&self) -> Result<Resource, Box<dyn Error>> {
+    pub async fn get_cal_home_set(&self) -> Result<Resource, KFError> {
         if let Some(h) = &self.cached_replies.lock().unwrap().calendar_home_set {
             return Ok(h.clone());
         }
@@ -189,7 +199,7 @@ impl Client {
         Ok(chs_url)
     }
 
-    async fn populate_calendars(&self) -> Result<(), Box<dyn Error>> {
+    async fn populate_calendars(&self) -> Result<(), KFError> {
         let cal_home_set = self.get_cal_home_set().await?;
 
         let reps = sub_request_and_extract_elems(
@@ -317,7 +327,7 @@ impl CalDavSource<RemoteCalendar> for Client {
         name: String,
         supported_components: SupportedComponents,
         color: Option<Color>,
-    ) -> Result<Arc<Mutex<RemoteCalendar>>, Box<dyn Error>> {
+    ) -> Result<Arc<Mutex<RemoteCalendar>>, KFError> {
         self.populate_calendars().await?;
 
         let cals = self
@@ -334,32 +344,37 @@ impl CalDavSource<RemoteCalendar> for Client {
                 type_: ItemType::Calendar,
                 detail: "".into(),
                 url,
-            }
-            .into());
+            });
         }
 
         let creation_body = calendar_body(name, supported_components, color);
 
+        let method = Method::from_bytes(b"MKCALENDAR").unwrap();
+
         let response = reqwest::Client::new()
-            .request(Method::from_bytes(b"MKCALENDAR").unwrap(), url.clone())
+            .request(method.clone(), url.clone())
             .header(CONTENT_TYPE, "application/xml")
             .basic_auth(self.resource.username(), Some(self.resource.password()))
             .body(creation_body)
             .send()
-            .await?;
+            .await
+            .map_err(|e| KFError::HttpRequestError {
+                method,
+                url: url.clone(),
+                source: e,
+            })?;
 
         let status = response.status();
         if status != StatusCode::CREATED {
             return Err(KFError::UnexpectedHTTPStatusCode {
                 expected: HttpStatusConstraint::Specific(StatusCode::CREATED),
                 got: status,
-            }
-            .into());
+            });
         }
 
         self.get_calendar(&url)
             .await
-            .ok_or(format!("Unable to insert calendar {:?}", url).into())
+            .ok_or(KFError::CalendarDidNotSyncAfterCreation(url))
     }
 }
 
