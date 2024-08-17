@@ -255,13 +255,18 @@ impl DavCalendar for RemoteCalendar {
         Ok(items)
     }
 
-    async fn get_item_by_url(&self, url: &Url) -> Result<Option<Item>, Box<dyn Error>> {
+    async fn get_item_by_url(&self, url: &Url) -> KFResult<Option<Item>> {
         let res = reqwest::Client::new()
             .get(url.clone())
             .header(CONTENT_TYPE, "text/calendar")
             .basic_auth(self.resource.username(), Some(self.resource.password()))
             .send()
-            .await?;
+            .await
+            .map_err(|source| KFError::HttpRequestError {
+                url: url.clone(),
+                method: Method::GET,
+                source,
+            })?;
 
         if !res.status().is_success() {
             return Err(KFError::UnexpectedHTTPStatusCode {
@@ -271,7 +276,14 @@ impl DavCalendar for RemoteCalendar {
             .into());
         }
 
-        let text = res.text().await?;
+        let text = res
+            .text()
+            .await
+            .map_err(|source| KFError::HttpRequestError {
+                url: url.clone(),
+                method: Method::GET,
+                source,
+            })?;
 
         // This is supposed to be cached
         let version_tags = self.get_item_version_tags().await?;

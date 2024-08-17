@@ -93,7 +93,7 @@ pub trait DavCalendar: BaseCalendar {
     async fn get_item_version_tags(&self) -> KFResult<HashMap<Url, VersionTag>>;
 
     /// Returns a particular item
-    async fn get_item_by_url(&self, url: &Url) -> Result<Option<Item>, Box<dyn Error>>;
+    async fn get_item_by_url(&self, url: &Url) -> KFResult<Option<Item>>;
 
     /// Returns a set of items.
     /// This is usually faster than calling multiple consecutive [`DavCalendar::get_item_by_url`], since it only issues one HTTP request.

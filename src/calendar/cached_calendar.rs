@@ -356,7 +356,7 @@ impl DavCalendar for CachedCalendar {
         Ok(result)
     }
 
-    async fn get_item_by_url(&self, url: &Url) -> Result<Option<Item>, Box<dyn Error>> {
+    async fn get_item_by_url(&self, url: &Url) -> KFResult<Option<Item>> {
         #[cfg(feature = "local_calendar_mocks_remote_calendars")]
         self.mock_behaviour
             .as_ref()
