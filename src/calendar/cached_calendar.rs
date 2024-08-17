@@ -159,8 +159,7 @@ impl CachedCalendar {
                 type_: item.type_(),
                 detail: format!("Item {:?} cannot be added", item.url()),
                 url: item.url().clone(),
-            }
-            .into());
+            });
         }
         #[cfg(not(feature = "local_calendar_mocks_remote_calendars"))]
         return Ok(self.regular_add_or_update_item(item));
@@ -176,8 +175,7 @@ impl CachedCalendar {
                 type_: Some(item.type_()),
                 detail: "Item cannot be updated".into(),
                 url: item.url().clone(),
-            }
-            .into());
+            });
         }
         #[cfg(not(feature = "local_calendar_mocks_remote_calendars"))]
         return Ok(self.regular_add_or_update_item(item));
@@ -193,8 +191,7 @@ impl CachedCalendar {
                 type_: None,
                 detail: "Can't mark item for deletion".into(),
                 url: item_url.clone(),
-            }
-            .into()),
+            }),
             Some(item) => {
                 match item.sync_status() {
                     SyncStatus::Synced(prev_ss) => {
@@ -226,8 +223,7 @@ impl CachedCalendar {
                 type_: None,
                 detail: "Can't immediately delete item".into(),
                 url: item_url.clone(),
-            }
-            .into()),
+            }),
             Some(_) => Ok(()),
         }
     }
