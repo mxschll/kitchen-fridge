@@ -103,7 +103,7 @@ pub trait DavCalendar: BaseCalendar {
     async fn delete_item(&mut self, item_url: &Url) -> KFResult<()>;
 
     /// Get the URLs of all current items in this calendar
-    async fn get_item_urls(&self) -> Result<HashSet<Url>, Box<dyn Error>> {
+    async fn get_item_urls(&self) -> KFResult<HashSet<Url>> {
         let items = self.get_item_version_tags().await?;
         Ok(items.keys().cloned().collect())
     }
