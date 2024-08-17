@@ -369,7 +369,7 @@ impl CalDavSource<RemoteCalendar> for Client {
         let status = response.status();
         if status != StatusCode::CREATED {
             return Err(KFError::UnexpectedHTTPStatusCode {
-                expected: HttpStatusConstraint::Specific(StatusCode::CREATED),
+                expected: HttpStatusConstraint::Specific(vec![StatusCode::CREATED]),
                 got: status,
             });
         }
@@ -377,6 +377,42 @@ impl CalDavSource<RemoteCalendar> for Client {
         self.get_calendar(&url)
             .await
             .ok_or(KFError::CalendarDidNotSyncAfterCreation(url))
+    }
+
+    async fn delete_calendar(
+        &mut self,
+        url: &Url,
+    ) -> Result<Option<Arc<Mutex<RemoteCalendar>>>, Box<dyn Error>> {
+        // First, attempt to delete the calendar on the remote server:
+        let response = reqwest::Client::new()
+            .request(Method::DELETE, url.clone())
+            .header(CONTENT_TYPE, "application/xml")
+            .basic_auth(
+                self.resource.username().to_string(),
+                Some(self.resource.password().to_string()),
+            )
+            .send()
+            .await?;
+
+        // Check that some acceptable HTTP status was returned
+        // In WebDAV, a 207 Multistatus status on DELETE implies that the entire deletion failed, since it's all or nothing
+        let status = response.status();
+
+        let constraint =
+            HttpStatusConstraint::Specific(vec![StatusCode::OK, StatusCode::NO_CONTENT]);
+
+        constraint
+            .assert(status)
+            .map_err(|_| KFError::ItemDoesNotExist {
+                detail: "Can't delete calendar".into(),
+                url: url.clone(),
+                type_: Some(ItemType::Calendar),
+            })?;
+
+        // Now that we've removed the calendar from the server, evict it from the cached replies (if present)
+        let mut replies = self.cached_replies.lock().unwrap();
+        let cals = replies.calendars.as_mut();
+        Ok(cals.unwrap().remove(url))
     }
 }
 

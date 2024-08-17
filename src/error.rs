@@ -1,12 +1,37 @@
+use std::error::Error;
+
 use reqwest::StatusCode;
 use url::Url;
 
 use crate::{calendar::remote_calendar::RemoteCalendarError, ical::IcalParseError, item::ItemType};
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum HttpStatusConstraint {
     Success,
-    Specific(StatusCode),
+
+    /// It was required for the status to be one of those provided
+    Specific(Vec<StatusCode>),
+}
+
+impl HttpStatusConstraint {
+    pub fn satisfied_by(&self, status: StatusCode) -> bool {
+        match self {
+            Self::Success => status.is_success(),
+            Self::Specific(statuses) => statuses.iter().any(|s| *s == status),
+        }
+    }
+
+    pub fn assert(&self, status: StatusCode) -> Result<(), Box<dyn Error>> {
+        if self.satisfied_by(status) {
+            Ok(())
+        } else {
+            Err(KFError::UnexpectedHTTPStatusCode {
+                expected: self.clone(),
+                got: status,
+            }
+            .into())
+        }
+    }
 }
 
 /// Errors common to the Kitchen Fridge library
@@ -42,6 +67,9 @@ pub enum KFError {
         url: Url,
     },
 
+    /// An item does not exist when it ought to have.
+    ///
+    /// type_ is None when the type of the item is unknown
     #[error("{detail}; {type_:?} {url:?} does not exist")]
     ItemDoesNotExist {
         type_: Option<ItemType>,

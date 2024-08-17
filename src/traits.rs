@@ -33,7 +33,13 @@ pub trait CalDavSource<T: BaseCalendar> {
         color: Option<Color>,
     ) -> KFResult<Arc<Mutex<T>>>;
 
-    // Removing a calendar is not supported yet
+    /// Delete the calendar with the given URL within the source.
+    ///
+    /// Returns a copy of the calendar deleted if available.
+    ///
+    /// Returns Err if the calendar is not found in the source.
+    async fn delete_calendar(&mut self, url: &Url)
+        -> Result<Option<Arc<Mutex<T>>>, Box<dyn Error>>;
 }
 
 /// This trait contains functions that are common to all calendars

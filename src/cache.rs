@@ -229,6 +229,22 @@ impl Cache {
     pub fn get_calendar_sync(&self, url: &Url) -> Option<Arc<Mutex<CachedCalendar>>> {
         self.data.calendars.get(url).cloned()
     }
+
+    /// The non-async version of [`crate::traits::CalDavSource::delete_calendar`]
+    pub fn delete_calendar_sync(
+        &mut self,
+        url: &Url,
+    ) -> Result<Option<Arc<Mutex<CachedCalendar>>>, Box<dyn Error>> {
+        match self.data.calendars.remove(url) {
+            Some(c) => Ok(Some(c)),
+            None => Err(KFError::ItemDoesNotExist {
+                detail: "Can't delete calendar".into(),
+                url: url.clone(),
+                type_: Some(ItemType::Calendar),
+            }
+            .into()),
+        }
+    }
 }
 
 #[async_trait]
@@ -272,6 +288,13 @@ impl CalDavSource<CachedCalendar> for Cache {
             }),
             None => Ok(arc),
         }
+    }
+
+    async fn delete_calendar(
+        &mut self,
+        url: &Url,
+    ) -> Result<Option<Arc<Mutex<CachedCalendar>>>, Box<dyn Error>> {
+        Self::delete_calendar_sync(self, url)
     }
 }
 
