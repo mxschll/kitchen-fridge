@@ -234,15 +234,14 @@ impl Cache {
     pub fn delete_calendar_sync(
         &mut self,
         url: &Url,
-    ) -> Result<Option<Arc<Mutex<CachedCalendar>>>, Box<dyn Error>> {
+    ) -> KFResult<Option<Arc<Mutex<CachedCalendar>>>> {
         match self.data.calendars.remove(url) {
             Some(c) => Ok(Some(c)),
             None => Err(KFError::ItemDoesNotExist {
                 detail: "Can't delete calendar".into(),
                 url: url.clone(),
                 type_: Some(ItemType::Calendar),
-            }
-            .into()),
+            }),
         }
     }
 }
@@ -290,10 +289,7 @@ impl CalDavSource<CachedCalendar> for Cache {
         }
     }
 
-    async fn delete_calendar(
-        &mut self,
-        url: &Url,
-    ) -> Result<Option<Arc<Mutex<CachedCalendar>>>, Box<dyn Error>> {
+    async fn delete_calendar(&mut self, url: &Url) -> KFResult<Option<Arc<Mutex<CachedCalendar>>>> {
         Self::delete_calendar_sync(self, url)
     }
 }

@@ -38,8 +38,7 @@ pub trait CalDavSource<T: BaseCalendar> {
     /// Returns a copy of the calendar deleted if available.
     ///
     /// Returns Err if the calendar is not found in the source.
-    async fn delete_calendar(&mut self, url: &Url)
-        -> Result<Option<Arc<Mutex<T>>>, Box<dyn Error>>;
+    async fn delete_calendar(&mut self, url: &Url) -> KFResult<Option<Arc<Mutex<T>>>>;
 }
 
 /// This trait contains functions that are common to all calendars

@@ -379,10 +379,7 @@ impl CalDavSource<RemoteCalendar> for Client {
             .ok_or(KFError::CalendarDidNotSyncAfterCreation(url))
     }
 
-    async fn delete_calendar(
-        &mut self,
-        url: &Url,
-    ) -> Result<Option<Arc<Mutex<RemoteCalendar>>>, Box<dyn Error>> {
+    async fn delete_calendar(&mut self, url: &Url) -> KFResult<Option<Arc<Mutex<RemoteCalendar>>>> {
         // First, attempt to delete the calendar on the remote server:
         let response = reqwest::Client::new()
             .request(Method::DELETE, url.clone())
@@ -392,7 +389,12 @@ impl CalDavSource<RemoteCalendar> for Client {
                 Some(self.resource.password().to_string()),
             )
             .send()
-            .await?;
+            .await
+            .map_err(|source| KFError::HttpRequestError {
+                url: url.clone(),
+                method: Method::DELETE,
+                source,
+            })?;
 
         // Check that some acceptable HTTP status was returned
         // In WebDAV, a 207 Multistatus status on DELETE implies that the entire deletion failed, since it's all or nothing
