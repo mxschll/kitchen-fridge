@@ -32,6 +32,10 @@ pub struct CachedCalendar {
     mock_behaviour: Option<Arc<Mutex<MockBehaviour>>>,
 
     items: HashMap<Url, Item>,
+
+    /// Marks this calendar for deletion.
+    /// On the next sync, it should be both deleted on the server and removed from its local container
+    deleted: bool,
 }
 
 impl CachedCalendar {
@@ -183,6 +187,10 @@ impl CachedCalendar {
         return self.update_item_maybe_mocked(item);
     }
 
+    pub fn mark_for_deletion_sync(&mut self) {
+        self.deleted = true;
+    }
+
     /// The non-async version of [`Self::mark_for_deletion`]
     pub fn mark_item_for_deletion_sync(&mut self, item_url: &Url) -> KFResult<()> {
         match self.items.get_mut(item_url) {
@@ -275,6 +283,7 @@ impl CompleteCalendar for CachedCalendar {
             #[cfg(feature = "local_calendar_mocks_remote_calendars")]
             mock_behaviour: None,
             items: HashMap::new(),
+            deleted: false,
         }
     }
 
@@ -296,6 +305,14 @@ impl CompleteCalendar for CachedCalendar {
 
     async fn get_item_by_url_mut<'a>(&'a mut self, url: &Url) -> Option<&'a mut Item> {
         self.get_item_by_url_mut_sync(url)
+    }
+
+    async fn mark_for_deletion(&mut self) {
+        self.mark_for_deletion_sync()
+    }
+
+    async fn marked_for_deletion(&self) -> bool {
+        self.deleted
     }
 
     async fn mark_item_for_deletion(&mut self, item_url: &Url) -> KFResult<()> {

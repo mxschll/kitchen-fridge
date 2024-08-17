@@ -146,6 +146,14 @@ pub trait CompleteCalendar: BaseCalendar {
     /// Returns a particular item
     async fn get_item_by_url_mut<'a>(&'a mut self, url: &Url) -> Option<&'a mut Item>;
 
+    /// Mark this calendar for deletion.
+    /// This is required so that the upcoming sync will know it should also delete this calendar from the server
+    /// (after which this object should be removed from its container)
+    async fn mark_for_deletion(&mut self);
+
+    /// Whether this calendar is flagged to be deleted on the next sync
+    async fn marked_for_deletion(&self) -> bool;
+
     /// Mark an item for deletion.
     /// This is required so that the upcoming sync will know it should also also delete this task from the server
     /// (and then call [`CompleteCalendar::immediately_delete_item`] once it has been successfully deleted on the server)

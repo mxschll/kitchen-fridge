@@ -151,7 +151,10 @@ where
                 Ok(arc) => arc,
             };
 
-            if let Err(err) = Self::sync_calendar_pair(counterpart, cal_remote, progress).await {
+            if let Err(err) = self
+                .sync_calendar_pair(counterpart, cal_remote, progress)
+                .await
+            {
                 progress.warn(&format!(
                     "Unable to sync calendar {}: {}, skipping this time.",
                     cal_url, err
@@ -179,7 +182,10 @@ where
                 Ok(arc) => arc,
             };
 
-            if let Err(err) = Self::sync_calendar_pair(cal_local, counterpart, progress).await {
+            if let Err(err) = self
+                .sync_calendar_pair(cal_local, counterpart, progress)
+                .await
+            {
                 progress.warn(&format!(
                     "Unable to sync calendar {}: {}, skipping this time.",
                     cal_url, err
@@ -209,6 +215,7 @@ where
     }
 
     async fn sync_calendar_pair(
+        &mut self,
         cal_local: Arc<Mutex<T>>,
         cal_remote: Arc<Mutex<U>>,
         progress: &mut SyncProgress,
@@ -224,6 +231,19 @@ where
             items_done_already: 0,
             details: "started".to_string(),
         });
+
+        // Step 0 - if the local calendar is marked for deletion, remove it from the remote and the local providers
+        if cal_local.marked_for_deletion().await {
+            self.remote
+                .delete_calendar(cal_local.url())
+                .await
+                .map(|_| ())?;
+            self.local
+                .delete_calendar(cal_local.url())
+                .await
+                .map(|_| ())?;
+            return Ok(());
+        }
 
         // Step 1 - find the differences
         progress.debug("Finding the differences to sync...");
