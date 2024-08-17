@@ -25,9 +25,6 @@ pub enum KFError {
         source: minidom::Error,
     },
 
-    #[error("Generic error: {0}")]
-    GenericError(#[from] Box<dyn std::error::Error>),
-
     #[error("HTTP request {method} {url} resulted in an error: {source}")]
     HttpRequestError {
         url: Url,
