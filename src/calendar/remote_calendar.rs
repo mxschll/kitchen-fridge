@@ -213,7 +213,7 @@ impl DavCalendar for RemoteCalendar {
         }
     }
 
-    async fn get_item_version_tags(&self) -> Result<HashMap<Url, VersionTag>, Box<dyn Error>> {
+    async fn get_item_version_tags(&self) -> KFResult<HashMap<Url, VersionTag>> {
         if let Some(map) = &*self.cached_version_tags.lock().unwrap() {
             log::debug!("Version tags are already cached.");
             return Ok(map.clone());

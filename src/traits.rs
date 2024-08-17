@@ -90,7 +90,7 @@ pub trait DavCalendar: BaseCalendar {
     ) -> Self;
 
     /// Get the URLs and the version tags of every item in this calendar
-    async fn get_item_version_tags(&self) -> Result<HashMap<Url, VersionTag>, Box<dyn Error>>;
+    async fn get_item_version_tags(&self) -> KFResult<HashMap<Url, VersionTag>>;
 
     /// Returns a particular item
     async fn get_item_by_url(&self, url: &Url) -> Result<Option<Item>, Box<dyn Error>>;

@@ -334,7 +334,7 @@ impl DavCalendar for CachedCalendar {
         )
     }
 
-    async fn get_item_version_tags(&self) -> Result<HashMap<Url, VersionTag>, Box<dyn Error>> {
+    async fn get_item_version_tags(&self) -> KFResult<HashMap<Url, VersionTag>> {
         #[cfg(feature = "local_calendar_mocks_remote_calendars")]
         self.mock_behaviour
             .as_ref()

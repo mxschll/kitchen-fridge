@@ -96,7 +96,7 @@ pub(crate) async fn sub_request_and_extract_elem(
     resource: &Resource,
     body: String,
     items: &[&str],
-) -> Result<String, KFError> {
+) -> KFResult<String> {
     let text = sub_request(resource, "PROPFIND", body, 0).await?;
 
     let mut current_element: &Element = &text
@@ -116,7 +116,7 @@ pub(crate) async fn sub_request_and_extract_elems(
     method: &str,
     body: String,
     item: &str,
-) -> Result<Vec<Element>, KFError> {
+) -> KFResult<Vec<Element>> {
     let text = sub_request(resource, method, body, 1).await?;
 
     let element: &Element = &text
