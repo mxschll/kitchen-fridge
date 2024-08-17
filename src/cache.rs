@@ -1,7 +1,6 @@
 //! This module provides a local cache for CalDAV data
 
 use std::collections::HashMap;
-use std::error::Error;
 use std::ffi::OsStr;
 use std::path::Path;
 use std::path::PathBuf;
