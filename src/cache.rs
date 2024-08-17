@@ -15,6 +15,7 @@ use url::Url;
 use crate::calendar::cached_calendar::CachedCalendar;
 use crate::calendar::SupportedComponents;
 use crate::error::KFError;
+use crate::error::KFResult;
 use crate::item::ItemType;
 use crate::traits::BaseCalendar;
 use crate::traits::CalDavSource;
@@ -27,9 +28,17 @@ const MAIN_FILE: &str = "data.json";
 
 #[derive(thiserror::Error, Debug)]
 pub enum CacheError {
+    #[error("IO error: {0}")]
+    IoError(#[from] std::io::Error),
+
+    #[error("Error deserializing JSON: {0}")]
+    JsonDeserializationError(#[from] serde_json::Error),
+
     #[error("Unable to open file {path:?}: {err}")]
     UnableToOpenFile { path: PathBuf, err: std::io::Error },
 }
+
+pub type CacheResult<T> = Result<T, CacheError>;
 
 /// A CalDAV source that stores its items in a local folder.
 ///
@@ -67,7 +76,7 @@ impl Cache {
 
     /// Initialize a cache from the content of a valid backing folder if it exists.
     /// Returns an error otherwise
-    pub fn from_folder(folder: &Path) -> Result<Self, Box<dyn Error>> {
+    pub fn from_folder(folder: &Path) -> CacheResult<Self> {
         // Load shared data...
         let main_file = folder.join(MAIN_FILE);
         let mut data: CachedData = match std::fs::File::open(&main_file) {
@@ -75,8 +84,7 @@ impl Cache {
                 return Err(CacheError::UnableToOpenFile {
                     path: main_file,
                     err,
-                }
-                .into());
+                });
             }
             Ok(file) => serde_json::from_reader(file)?,
         };
@@ -119,7 +127,7 @@ impl Cache {
         })
     }
 
-    fn load_calendar(path: &Path) -> Result<CachedCalendar, Box<dyn Error>> {
+    fn load_calendar(path: &Path) -> CacheResult<CachedCalendar> {
         let file = std::fs::File::open(path)?;
         Ok(serde_json::from_reader(file)?)
     }
@@ -163,10 +171,7 @@ impl Cache {
     ///
     /// This is not a complete equality test: some attributes (sync status...) may differ. This should mostly be used in tests
     #[cfg(any(test, feature = "integration_tests"))]
-    pub async fn has_same_observable_content_as(
-        &self,
-        other: &Self,
-    ) -> Result<bool, Box<dyn Error>> {
+    pub async fn has_same_observable_content_as(&self, other: &Self) -> KFResult<bool> {
         let calendars_l = self.get_calendars().await?;
         let calendars_r = other.get_calendars().await?;
 
@@ -207,9 +212,7 @@ impl Drop for Cache {
 
 impl Cache {
     /// The non-async version of [`crate::traits::CalDavSource::get_calendars`]
-    pub fn get_calendars_sync(
-        &self,
-    ) -> Result<HashMap<Url, Arc<Mutex<CachedCalendar>>>, Box<dyn Error>> {
+    pub fn get_calendars_sync(&self) -> Result<HashMap<Url, Arc<Mutex<CachedCalendar>>>, KFError> {
         #[cfg(feature = "local_calendar_mocks_remote_calendars")]
         self.mock_behaviour
             .as_ref()
@@ -231,9 +234,7 @@ impl Cache {
 
 #[async_trait]
 impl CalDavSource<CachedCalendar> for Cache {
-    async fn get_calendars(
-        &self,
-    ) -> Result<HashMap<Url, Arc<Mutex<CachedCalendar>>>, Box<dyn Error>> {
+    async fn get_calendars(&self) -> Result<HashMap<Url, Arc<Mutex<CachedCalendar>>>, KFError> {
         self.get_calendars_sync()
     }
 

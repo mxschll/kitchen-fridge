@@ -4,12 +4,14 @@ use std::sync::Mutex;
 
 use async_trait::async_trait;
 use csscolorparser::Color;
+use http::header::ToStrError;
+use http::{HeaderValue, Method};
 use reqwest::header::HeaderMap;
 use reqwest::{header::CONTENT_LENGTH, header::CONTENT_TYPE};
 use url::Url;
 
 use crate::calendar::SupportedComponents;
-use crate::error::{HttpStatusConstraint, KFError};
+use crate::error::{HttpStatusConstraint, KFError, KFResult};
 use crate::item::Item;
 use crate::item::SyncStatus;
 use crate::item::VersionTag;
@@ -49,6 +51,12 @@ pub enum RemoteCalendarError {
     #[error("Cannot update an item that has not changed")]
     CannotUpdateUnchangedItem,
 
+    #[error("Non-ASCII header: {header:?}: {source}")]
+    NonAsciiHeader {
+        header: HeaderValue,
+        source: ToStrError,
+    },
+
     #[error("Inconsistent data: {0} has no version tag")]
     ItemLacksVersionTag(Url),
 
@@ -85,7 +93,7 @@ impl BaseCalendar for RemoteCalendar {
         self.color.as_ref()
     }
 
-    async fn add_item(&mut self, item: Item) -> Result<SyncStatus, Box<dyn Error>> {
+    async fn add_item(&mut self, item: Item) -> KFResult<SyncStatus> {
         let ical_text = crate::ical::build_from(&item)?;
 
         let response = reqwest::Client::new()
@@ -96,7 +104,12 @@ impl BaseCalendar for RemoteCalendar {
             .basic_auth(self.resource.username(), Some(self.resource.password()))
             .body(ical_text)
             .send()
-            .await?;
+            .await
+            .map_err(|source| KFError::HttpRequestError {
+                url: item.url().clone(),
+                method: Method::GET,
+                source,
+            })?;
 
         if !response.status().is_success() {
             return Err(KFError::UnexpectedHTTPStatusCode {
@@ -114,14 +127,19 @@ impl BaseCalendar for RemoteCalendar {
             }
             .into()),
             Some(etag) => {
-                let vtag_str = etag.to_str()?;
+                let vtag_str =
+                    etag.to_str()
+                        .map_err(|source| RemoteCalendarError::NonAsciiHeader {
+                            header: etag.clone(),
+                            source,
+                        })?;
                 let vtag = VersionTag::from(String::from(vtag_str));
                 Ok(SyncStatus::Synced(vtag))
             }
         }
     }
 
-    async fn update_item(&mut self, item: Item) -> Result<SyncStatus, Box<dyn Error>> {
+    async fn update_item(&mut self, item: Item) -> KFResult<SyncStatus> {
         let old_etag = match item.sync_status() {
             SyncStatus::NotSynced => {
                 return Err(RemoteCalendarError::CannotUpdateUnsyncedItem.into())
@@ -142,7 +160,12 @@ impl BaseCalendar for RemoteCalendar {
             .basic_auth(self.resource.username(), Some(self.resource.password()))
             .body(ical_text)
             .send()
-            .await?;
+            .await
+            .map_err(|source| KFError::HttpRequestError {
+                url: item.url().clone(),
+                method: Method::PUT,
+                source,
+            })?;
 
         if !request.status().is_success() {
             return Err(KFError::UnexpectedHTTPStatusCode {
@@ -160,7 +183,12 @@ impl BaseCalendar for RemoteCalendar {
             }
             .into()),
             Some(etag) => {
-                let vtag_str = etag.to_str()?;
+                let vtag_str =
+                    etag.to_str()
+                        .map_err(|source| RemoteCalendarError::NonAsciiHeader {
+                            header: etag.clone(),
+                            source,
+                        })?;
                 let vtag = VersionTag::from(String::from(vtag_str));
                 Ok(SyncStatus::Synced(vtag))
             }
@@ -298,12 +326,17 @@ impl DavCalendar for RemoteCalendar {
         Ok(results)
     }
 
-    async fn delete_item(&mut self, item_url: &Url) -> Result<(), Box<dyn Error>> {
+    async fn delete_item(&mut self, item_url: &Url) -> KFResult<()> {
         let del_response = reqwest::Client::new()
             .delete(item_url.clone())
             .basic_auth(self.resource.username(), Some(self.resource.password()))
             .send()
-            .await?;
+            .await
+            .map_err(|source| KFError::HttpRequestError {
+                url: item_url.clone(),
+                method: Method::DELETE,
+                source,
+            })?;
 
         if !del_response.status().is_success() {
             return Err(KFError::UnexpectedHTTPStatusCode {

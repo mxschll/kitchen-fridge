@@ -14,7 +14,7 @@ use url::Url;
 
 use crate::calendar::remote_calendar::RemoteCalendar;
 use crate::calendar::SupportedComponents;
-use crate::error::{HttpStatusConstraint, KFError};
+use crate::error::{HttpStatusConstraint, KFError, KFResult};
 use crate::item::ItemType;
 use crate::resource::Resource;
 use crate::traits::BaseCalendar;
@@ -291,9 +291,7 @@ impl Client {
 
 #[async_trait]
 impl CalDavSource<RemoteCalendar> for Client {
-    async fn get_calendars(
-        &self,
-    ) -> Result<HashMap<Url, Arc<Mutex<RemoteCalendar>>>, Box<dyn Error>> {
+    async fn get_calendars(&self) -> KFResult<HashMap<Url, Arc<Mutex<RemoteCalendar>>>> {
         self.populate_calendars().await?;
 
         Ok(self

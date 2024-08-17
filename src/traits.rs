@@ -9,7 +9,7 @@ use csscolorparser::Color;
 use url::Url;
 
 use crate::calendar::SupportedComponents;
-use crate::error::KFError;
+use crate::error::KFResult;
 use crate::item::Item;
 use crate::item::SyncStatus;
 use crate::item::VersionTag;
@@ -22,7 +22,7 @@ use crate::resource::Resource;
 pub trait CalDavSource<T: BaseCalendar> {
     /// Returns the current calendars that this source contains
     /// This function may trigger an update (that can be a long process, or that can even fail, e.g. in case of a remote server)
-    async fn get_calendars(&self) -> Result<HashMap<Url, Arc<Mutex<T>>>, Box<dyn Error>>;
+    async fn get_calendars(&self) -> KFResult<HashMap<Url, Arc<Mutex<T>>>>;
     /// Returns the calendar matching the URL
     async fn get_calendar(&self, url: &Url) -> Option<Arc<Mutex<T>>>;
     /// Create a calendar if it did not exist, and return it
@@ -32,7 +32,7 @@ pub trait CalDavSource<T: BaseCalendar> {
         name: String,
         supported_components: SupportedComponents,
         color: Option<Color>,
-    ) -> Result<Arc<Mutex<T>>, KFError>;
+    ) -> KFResult<Arc<Mutex<T>>>;
 
     // Removing a calendar is not supported yet
 }
@@ -57,11 +57,11 @@ pub trait BaseCalendar {
     /// Add an item into this calendar, and return its new sync status.
     /// For local calendars, the sync status is not modified.
     /// For remote calendars, the sync status is updated by the server
-    async fn add_item(&mut self, item: Item) -> Result<SyncStatus, Box<dyn Error>>;
+    async fn add_item(&mut self, item: Item) -> KFResult<SyncStatus>;
 
     /// Update an item that already exists in this calendar and returns its new `SyncStatus`
     /// This replaces a given item at a given URL
-    async fn update_item(&mut self, item: Item) -> Result<SyncStatus, Box<dyn Error>>;
+    async fn update_item(&mut self, item: Item) -> KFResult<SyncStatus>;
 
     /// Returns whether this calDAV calendar supports to-do items
     fn supports_todo(&self) -> bool {
@@ -100,7 +100,7 @@ pub trait DavCalendar: BaseCalendar {
     async fn get_items_by_url(&self, urls: &[Url]) -> Result<Vec<Option<Item>>, Box<dyn Error>>;
 
     /// Delete an item
-    async fn delete_item(&mut self, item_url: &Url) -> Result<(), Box<dyn Error>>;
+    async fn delete_item(&mut self, item_url: &Url) -> KFResult<()>;
 
     /// Get the URLs of all current items in this calendar
     async fn get_item_urls(&self) -> Result<HashSet<Url>, Box<dyn Error>> {
@@ -128,13 +128,13 @@ pub trait CompleteCalendar: BaseCalendar {
     ) -> Self;
 
     /// Get the URLs of all current items in this calendar
-    async fn get_item_urls(&self) -> Result<HashSet<Url>, Box<dyn Error>>;
+    async fn get_item_urls(&self) -> KFResult<HashSet<Url>>;
 
     /// Returns all items that this calendar contains
-    async fn get_items(&self) -> Result<HashMap<Url, &Item>, Box<dyn Error>>;
+    async fn get_items(&self) -> KFResult<HashMap<Url, &Item>>;
 
     /// Returns all items that this calendar contains
-    async fn get_items_mut(&mut self) -> Result<HashMap<Url, &mut Item>, Box<dyn Error>>;
+    async fn get_items_mut(&mut self) -> KFResult<HashMap<Url, &mut Item>>;
 
     /// Returns a particular item
     async fn get_item_by_url<'a>(&'a self, url: &Url) -> Option<&'a Item>;
@@ -145,8 +145,8 @@ pub trait CompleteCalendar: BaseCalendar {
     /// Mark an item for deletion.
     /// This is required so that the upcoming sync will know it should also also delete this task from the server
     /// (and then call [`CompleteCalendar::immediately_delete_item`] once it has been successfully deleted on the server)
-    async fn mark_for_deletion(&mut self, item_id: &Url) -> Result<(), Box<dyn Error>>;
+    async fn mark_for_deletion(&mut self, item_id: &Url) -> KFResult<()>;
 
     /// Immediately remove an item. See [`CompleteCalendar::mark_for_deletion`]
-    async fn immediately_delete_item(&mut self, item_id: &Url) -> Result<(), Box<dyn Error>>;
+    async fn immediately_delete_item(&mut self, item_id: &Url) -> KFResult<()>;
 }

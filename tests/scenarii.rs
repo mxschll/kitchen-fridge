@@ -8,6 +8,7 @@
 //! This module can also check the sources after a sync contain the actual data we expect
 #![cfg(feature = "local_calendar_mocks_remote_calendars")]
 
+use kitchen_fridge::error::KFResult;
 use std::error::Error;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -732,7 +733,7 @@ async fn apply_changes_on_provider(
 async fn get_or_insert_calendar(
     source: &mut Cache,
     url: &Url,
-) -> Result<Arc<Mutex<CachedCalendar>>, Box<dyn Error>> {
+) -> KFResult<Arc<Mutex<CachedCalendar>>> {
     match source.get_calendar(url).await {
         Some(cal) => Ok(cal),
         None => {
