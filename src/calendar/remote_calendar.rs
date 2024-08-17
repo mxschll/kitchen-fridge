@@ -271,8 +271,7 @@ impl DavCalendar for RemoteCalendar {
             return Err(KFError::UnexpectedHTTPStatusCode {
                 expected: HttpStatusConstraint::Success,
                 got: res.status(),
-            }
-            .into());
+            });
         }
 
         let text = res
@@ -361,8 +360,7 @@ impl DavCalendar for RemoteCalendar {
             return Err(KFError::UnexpectedHTTPStatusCode {
                 expected: HttpStatusConstraint::Success,
                 got: del_response.status(),
-            }
-            .into());
+            });
         }
 
         Ok(())

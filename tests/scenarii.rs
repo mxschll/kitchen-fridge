@@ -9,7 +9,6 @@
 #![cfg(feature = "local_calendar_mocks_remote_calendars")]
 
 use kitchen_fridge::error::KFResult;
-use std::error::Error;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use url::Url;
