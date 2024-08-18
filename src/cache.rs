@@ -156,14 +156,19 @@ impl Cache {
 
         // Save each calendar
         for (cal_url, cal_mutex) in &self.data.calendars {
-            let file_name = sanitize_filename::sanitize(cal_url.as_str()) + ".cal";
-            let cal_file = folder.join(file_name);
+            let cal_file = self.calendar_path(cal_url);
             let file = std::fs::File::create(&cal_file)?;
             let cal = cal_mutex.lock().unwrap();
             serde_json::to_writer(file, &*cal)?;
         }
 
         Ok(())
+    }
+
+    /// The path of the file where the calendar with the given URL is serialized
+    pub fn calendar_path(&self, url: &Url) -> PathBuf {
+        let file_name = sanitize_filename::sanitize(url.as_str()) + ".cal";
+        self.backing_folder.join(file_name)
     }
 
     /// Compares two Caches to check they have the same current content
@@ -235,6 +240,14 @@ impl Cache {
         &mut self,
         url: &Url,
     ) -> KFResult<Option<Arc<Mutex<CachedCalendar>>>> {
+        // First, remove from filesystem
+        let path = self.calendar_path(url);
+        std::fs::remove_file(&path).map_err(|source| KFError::IoError {
+            detail: format!("Could not remove calendar at path {}", path.display()),
+            source,
+        })?;
+
+        // Then remove from memory
         match self.data.calendars.remove(url) {
             Some(c) => Ok(Some(c)),
             None => Err(KFError::ItemDoesNotExist {

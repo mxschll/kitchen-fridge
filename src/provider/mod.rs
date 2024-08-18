@@ -171,6 +171,11 @@ where
                 continue;
             }
 
+            if cal_local.lock().unwrap().marked_for_deletion().await {
+                self.local_mut().delete_calendar(&cal_url).await?;
+                continue;
+            }
+
             let counterpart = match self
                 .get_or_insert_remote_counterpart_calendar(&cal_url, cal_local.clone())
                 .await

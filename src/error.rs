@@ -60,6 +60,12 @@ pub enum KFError {
     #[error("Error parsing ical data: {0}")]
     IcalParseError(#[from] IcalParseError),
 
+    #[error("{detail}; an IO error occurred: {source}")]
+    IoError {
+        detail: String,
+        source: std::io::Error,
+    },
+
     #[error("{detail}; {type_:?} {url:?} already exists")]
     ItemAlreadyExists {
         type_: ItemType,
