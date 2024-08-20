@@ -363,6 +363,7 @@ pub fn scenarii_basic() -> Vec<ItemScenario> {
                 Utc::now(),
                 "prod_id".to_string(),
                 Vec::new(),
+                Vec::new(),
             )),
         )],
         after_sync: LocatedState::BothSynced(ItemState {
@@ -387,6 +388,7 @@ pub fn scenarii_basic() -> Vec<ItemScenario> {
                 Some(Utc::now()),
                 Utc::now(),
                 "prod_id".to_string(),
+                Vec::new(),
                 Vec::new(),
             )),
         )],
@@ -556,6 +558,7 @@ pub fn scenarii_transient_task() -> Vec<ItemScenario> {
                     Utc::now(),
                     "prod_id".to_string(),
                     Vec::new(),
+                    Vec::new(),
                 )),
             ),
             ChangeToApply::Rename(String::from("A new name")),
@@ -637,6 +640,7 @@ async fn populate_test_provider(
             Some(now),
             now,
             "prod_id".to_string(),
+            Vec::new(),
             Vec::new(),
         ));
 

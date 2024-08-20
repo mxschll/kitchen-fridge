@@ -6,7 +6,7 @@ use ical::parser::ParserError;
 use url::Url;
 
 use crate::item::SyncStatus;
-use crate::task::CompletionStatus;
+use crate::task::{CompletionStatus, Relationship};
 use crate::Event;
 use crate::Item;
 use crate::Task;
@@ -35,6 +35,9 @@ pub enum IcalParseError {
 
     #[error("Parsing multiple items are not supported")]
     MultipleItems,
+
+    #[error("Property {prop_name} has no value")]
+    PropertyHasNoValue { prop_name: String },
 
     #[error("Unable to parseiCal data for item {item_url}: {source}")]
     UnableToParse { item_url: Url, source: ParserError },
@@ -75,6 +78,7 @@ pub fn parse(
             let mut completion_date = None;
             let mut creation_date = None;
             let mut extra_parameters = Vec::new();
+            let mut relationships = Vec::new();
 
             for prop in &todo.properties {
                 match prop.name.as_str() {
@@ -104,6 +108,31 @@ pub fn parse(
                     "CREATED" => {
                         // The property can be specified once, but is not mandatory
                         creation_date = parse_date_time_from_property(&prop.value)
+                    }
+                    "RELATED-TO" => {
+                        let reltypes = prop
+                            .params
+                            .as_ref()
+                            .and_then(|params| {
+                                params
+                                    .iter()
+                                    .find(|p| p.0 == "RELTYPE")
+                                    .map(|p| p.1.clone())
+                            })
+                            .unwrap_or(vec!["PARENT".to_string()]);
+
+                        if reltypes.len() > 1 {
+                            log::warn!("Multiple RELTYPE parameter values: {:?}", reltypes);
+                        }
+
+                        relationships.push(Relationship::new(
+                            prop.value
+                                .clone()
+                                .ok_or(IcalParseError::PropertyHasNoValue {
+                                    prop_name: "RELATED-TO".into(),
+                                })?,
+                            reltypes[0].clone(),
+                        ));
                     }
                     "STATUS" => {
                         // Possible values:
@@ -152,6 +181,7 @@ pub fn parse(
                 creation_date,
                 last_modified,
                 ical_prod_id,
+                relationships,
                 extra_parameters,
             ))
         }

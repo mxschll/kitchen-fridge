@@ -1,5 +1,7 @@
 //! To-do tasks (iCal `VTODO` item)
 
+use std::fmt::Display;
+
 use chrono::{DateTime, Utc};
 use ical::property::Property;
 use serde::{Deserialize, Serialize};
@@ -24,6 +26,41 @@ pub enum CompletionStatus {
 impl CompletionStatus {
     pub fn is_completed(&self) -> bool {
         matches!(self, CompletionStatus::Completed(_))
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Relationship {
+    /// The ical RELATED-TO property, see https://datatracker.ietf.org/doc/html/rfc5545#section-3.8.4.5
+    ///
+    /// This is the UID of a task to which this task is related.
+    related_to: String,
+
+    /// The ical RELTYPE parameter as found on a RELATED-TO property.
+    ///
+    /// See https://datatracker.ietf.org/doc/html/rfc5545#section-3.2.15
+    reltype: String,
+}
+impl Relationship {
+    pub fn new(related_to: String, reltype: String) -> Self {
+        Self {
+            related_to,
+            reltype,
+        }
+    }
+}
+impl Display for Relationship {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.reltype.as_str() {
+            "PARENT" => {}
+            x => {
+                f.write_str("RELTYPE=")?;
+                f.write_str(x)?;
+                f.write_str(":")?;
+            }
+        }
+
+        f.write_str(self.related_to.as_str())
     }
 }
 
@@ -53,6 +90,9 @@ pub struct Task {
 
     /// The PRODID, as defined in iCal files
     ical_prod_id: String,
+
+    /// Related items, derived from the RELATED-TO property.
+    relationships: Vec<Relationship>,
 
     /// Extra parameters that have not been parsed from the iCal file (because they're not supported (yet) by this crate).
     /// They are needed to serialize this item into an equivalent iCal file
@@ -84,6 +124,7 @@ impl Task {
             new_creation_date,
             new_last_modified,
             ical_prod_id,
+            Vec::new(),
             extra_parameters,
         )
     }
@@ -98,6 +139,7 @@ impl Task {
         creation_date: Option<DateTime<Utc>>,
         last_modified: DateTime<Utc>,
         ical_prod_id: String,
+        relationships: Vec<Relationship>,
         extra_parameters: Vec<Property>,
     ) -> Self {
         Self {
@@ -109,6 +151,7 @@ impl Task {
             creation_date,
             last_modified,
             ical_prod_id,
+            relationships,
             extra_parameters,
         }
     }
@@ -139,6 +182,31 @@ impl Task {
     }
     pub fn completion_status(&self) -> &CompletionStatus {
         &self.completion_status
+    }
+    pub fn relationships(&self) -> &Vec<Relationship> {
+        &self.relationships
+    }
+    /// The UID of the parent of this task, if any
+    pub fn parent(&self) -> Option<&String> {
+        self.relationships
+            .iter()
+            .find(|r| r.reltype == "PARENT")
+            .map(|r| &r.related_to)
+    }
+    pub fn set_parent(&mut self, parent_uid: String) {
+        match self.parent().cloned() {
+            Some(parent) => {
+                self.relationships
+                    .iter_mut()
+                    .find(|r| r.reltype == "PARENT" && r.related_to == parent)
+                    .unwrap()
+                    .related_to = parent_uid;
+            }
+            None => {
+                self.relationships
+                    .push(Relationship::new(parent_uid, "PARENT".to_string()));
+            }
+        }
     }
     pub fn extra_parameters(&self) -> &[Property] {
         &self.extra_parameters

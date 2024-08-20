@@ -4,6 +4,7 @@ use chrono::{DateTime, Utc};
 use ical::property::Property as IcalProperty;
 use ics::components::Parameter as IcsParameter;
 use ics::components::Property as IcsProperty;
+use ics::properties::RelatedTo;
 use ics::properties::{Completed, Created, LastModified, PercentComplete, Status, Summary};
 use ics::{ICalendar, ToDo};
 
@@ -30,6 +31,9 @@ pub fn build_from_task(task: &Task) -> String {
 
     todo.push(LastModified::new(s_last_modified));
     todo.push(Summary::new(task.name()));
+    for rel in task.relationships() {
+        todo.push(RelatedTo::new(rel.to_string()));
+    }
 
     match task.completion_status() {
         CompletionStatus::Uncompleted => {
