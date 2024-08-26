@@ -252,12 +252,12 @@ where
 
         // Step 1 - find the differences
         progress.debug("Finding the differences to sync...");
-        let mut local_del = HashSet::new();
-        let mut remote_del = HashSet::new();
-        let mut local_changes = HashSet::new();
-        let mut remote_changes = HashSet::new();
-        let mut local_additions = HashSet::new();
-        let mut remote_additions = HashSet::new();
+        let mut local_item_dels = HashSet::new();
+        let mut remote_item_dels = HashSet::new();
+        let mut local_item_changes = HashSet::new();
+        let mut remote_item_changes = HashSet::new();
+        let mut local_item_additions = HashSet::new();
+        let mut remote_item_additions = HashSet::new();
 
         let remote_items = cal_remote.get_item_version_tags().await?;
         progress.feedback(SyncEvent::InProgress {
@@ -273,7 +273,7 @@ where
                 None => {
                     // This was created on the remote
                     progress.debug(&format!("*   {} is a remote addition", url));
-                    remote_additions.insert(url);
+                    remote_item_additions.insert(url);
                 }
                 Some(local_item) => {
                     if !local_items_to_handle.remove(&url) {
@@ -292,31 +292,31 @@ where
                             if &remote_tag != local_tag {
                                 // This has been modified on the remote
                                 progress.debug(&format!("*   {} is a remote change", url));
-                                remote_changes.insert(url);
+                                remote_item_changes.insert(url);
                             }
                         }
                         SyncStatus::LocallyModified(local_tag) => {
                             if &remote_tag == local_tag {
                                 // This has been changed locally
                                 progress.debug(&format!("*   {} is a local change", url));
-                                local_changes.insert(url);
+                                local_item_changes.insert(url);
                             } else {
                                 progress.info(&format!("Conflict: task {} has been modified in both sources. Using the remote version.", url));
                                 progress
                                     .debug(&format!("*   {} is considered a remote change", url));
-                                remote_changes.insert(url);
+                                remote_item_changes.insert(url);
                             }
                         }
                         SyncStatus::LocallyDeleted(local_tag) => {
                             if &remote_tag == local_tag {
                                 // This has been locally deleted
                                 progress.debug(&format!("*   {} is a local deletion", url));
-                                local_del.insert(url);
+                                local_item_dels.insert(url);
                             } else {
                                 progress.info(&format!("Conflict: task {} has been locally deleted and remotely modified. Reverting to the remote version.", url));
                                 progress
                                     .debug(&format!("*   {} is a considered a remote change", url));
-                                remote_changes.insert(url);
+                                remote_item_changes.insert(url);
                             }
                         }
                     }
@@ -342,28 +342,28 @@ where
                 SyncStatus::Synced(_) => {
                     // This item has been removed from the remote
                     progress.debug(&format!("#   {} is a deletion from the server", url));
-                    remote_del.insert(url);
+                    remote_item_dels.insert(url);
                 }
                 SyncStatus::NotSynced => {
                     // This item has just been locally created
                     progress.debug(&format!("#   {} has been locally created", url));
-                    local_additions.insert(url);
+                    local_item_additions.insert(url);
                 }
                 SyncStatus::LocallyDeleted(_) => {
                     // This item has been deleted from both sources
                     progress.debug(&format!("#   {} has been deleted from both sources", url));
-                    remote_del.insert(url);
+                    remote_item_dels.insert(url);
                 }
                 SyncStatus::LocallyModified(_) => {
                     progress.info(&format!("Conflict: item {} has been deleted from the server and locally modified. Deleting the local copy", url));
-                    remote_del.insert(url);
+                    remote_item_dels.insert(url);
                 }
             }
         }
 
         // Step 2 - commit changes
         progress.trace("Committing changes...");
-        for url_del in local_del {
+        for url_del in local_item_dels {
             progress.debug(&format!(
                 "> Pushing local deletion {} to the server",
                 url_del
@@ -394,7 +394,7 @@ where
             }
         }
 
-        for url_del in remote_del {
+        for url_del in remote_item_dels {
             progress.debug(&format!("> Applying remote deletion {} locally", url_del));
             progress.increment_counter(1);
             progress.feedback(SyncEvent::InProgress {
@@ -408,7 +408,7 @@ where
         }
 
         Self::apply_remote_additions(
-            remote_additions,
+            remote_item_additions,
             &mut *cal_local,
             &mut *cal_remote,
             progress,
@@ -417,7 +417,7 @@ where
         .await;
 
         Self::apply_remote_changes(
-            remote_changes,
+            remote_item_changes,
             &mut *cal_local,
             &mut *cal_remote,
             progress,
@@ -425,7 +425,7 @@ where
         )
         .await;
 
-        for url_add in local_additions {
+        for url_add in local_item_additions {
             progress.debug(&format!(
                 "> Pushing local addition {} to the server",
                 url_add
@@ -456,7 +456,7 @@ where
             };
         }
 
-        for url_change in local_changes {
+        for url_change in local_item_changes {
             progress.debug(&format!(
                 "> Pushing local change {} to the server",
                 url_change
