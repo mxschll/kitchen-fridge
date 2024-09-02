@@ -10,6 +10,8 @@ use crate::error::KFError;
 use crate::error::KFResult;
 use crate::item::SyncStatus;
 use crate::traits::{BaseCalendar, CompleteCalendar};
+use crate::utils::NamespacedName;
+use crate::utils::Property;
 use crate::Item;
 
 #[cfg(feature = "local_calendar_mocks_remote_calendars")]
@@ -30,6 +32,9 @@ pub struct CachedCalendar {
     #[cfg(feature = "local_calendar_mocks_remote_calendars")]
     #[serde(skip)]
     mock_behaviour: Option<Arc<Mutex<MockBehaviour>>>,
+
+    /// CalDAV calendar properties
+    properties: HashMap<NamespacedName, Property>,
 
     items: HashMap<Url, Item>,
 
@@ -258,6 +263,36 @@ impl BaseCalendar for CachedCalendar {
         self.color.as_ref()
     }
 
+    async fn add_property(&mut self, prop: Property) -> KFResult<()> {
+        if self.properties.contains_key(prop.nsn()) {
+            return Err(KFError::PropertyAlreadyExists(prop));
+        }
+
+        self.properties.insert(prop.nsn().clone(), prop);
+
+        Ok(())
+    }
+
+    async fn update_property(&mut self, prop: Property) -> KFResult<()> {
+        if let Some(p) = self.properties.get_mut(prop.nsn()) {
+            //NOTE Should be okay since the key remains the same, thus the hash remains the same
+            *p = prop;
+            Ok(())
+        } else {
+            Err(KFError::PropertyDoesNotExist(prop.nsn))
+        }
+    }
+
+    async fn get_properties_by_name(
+        &self,
+        names: &[NamespacedName],
+    ) -> KFResult<Vec<Option<Property>>> {
+        Ok(names
+            .iter()
+            .map(|n| self.properties.get(n).cloned())
+            .collect())
+    }
+
     async fn add_item(&mut self, item: Item) -> KFResult<SyncStatus> {
         self.add_item_sync(item)
     }
@@ -283,6 +318,7 @@ impl CompleteCalendar for CachedCalendar {
             #[cfg(feature = "local_calendar_mocks_remote_calendars")]
             mock_behaviour: None,
             items: HashMap::new(),
+            properties: HashMap::new(),
             deleted: false,
         }
     }
@@ -307,6 +343,18 @@ impl CompleteCalendar for CachedCalendar {
         self.get_item_by_url_mut_sync(url)
     }
 
+    async fn get_properties(&self) -> &HashMap<NamespacedName, Property> {
+        &self.properties
+    }
+
+    async fn get_property_by_name(&self, name: &NamespacedName) -> Option<&Property> {
+        self.properties.get(name)
+    }
+
+    async fn get_property_by_name_mut(&mut self, name: &NamespacedName) -> Option<&mut Property> {
+        self.properties.get_mut(name)
+    }
+
     async fn mark_for_deletion(&mut self) {
         self.mark_for_deletion_sync()
     }
@@ -321,6 +369,23 @@ impl CompleteCalendar for CachedCalendar {
 
     async fn immediately_delete_item(&mut self, item_url: &Url) -> KFResult<()> {
         self.immediately_delete_item_sync(item_url)
+    }
+
+    async fn mark_prop_for_deletion(&mut self, nsn: &NamespacedName) -> KFResult<()> {
+        let prop = self
+            .properties
+            .get_mut(nsn)
+            .ok_or(KFError::PropertyDoesNotExist(nsn.clone()))?;
+        prop.sync_status = SyncStatus::LocallyDeleted(prop.value.clone().into());
+        Ok(())
+    }
+
+    async fn immediately_delete_prop(&mut self, nsn: &NamespacedName) -> KFResult<()> {
+        if self.properties.remove(nsn).is_some() {
+            Ok(())
+        } else {
+            Err(KFError::PropertyDoesNotExist(nsn.clone()))
+        }
     }
 }
 
@@ -396,5 +461,40 @@ impl DavCalendar for CachedCalendar {
             .map_or(Ok(()), |b| b.lock().unwrap().can_delete_item())?;
 
         self.immediately_delete_item(item_url).await
+    }
+
+    async fn get_properties(&self) -> KFResult<Vec<Property>> {
+        #[cfg(feature = "local_calendar_mocks_remote_calendars")]
+        self.mock_behaviour
+            .as_ref()
+            .map_or(Ok(Vec::<Property>::new()), |b| {
+                b.lock().unwrap().can_get_properties().map(|_| Vec::new())
+            })?;
+
+        Ok(CompleteCalendar::get_properties(self)
+            .await
+            .values()
+            .cloned()
+            .collect())
+    }
+
+    async fn get_property(&self, nsn: &NamespacedName) -> KFResult<Option<Property>> {
+        #[cfg(feature = "local_calendar_mocks_remote_calendars")]
+        self.mock_behaviour
+            .as_ref()
+            .map_or(Ok(Option::<Property>::None), |b| {
+                b.lock().unwrap().can_get_property().map(|_| None)
+            })?;
+
+        Ok(self.get_property_by_name(nsn).await.cloned())
+    }
+
+    async fn delete_property(&mut self, nsn: &NamespacedName) -> KFResult<()> {
+        #[cfg(feature = "local_calendar_mocks_remote_calendars")]
+        self.mock_behaviour
+            .as_ref()
+            .map_or(Ok(()), |b| b.lock().unwrap().can_delete_property())?;
+
+        self.immediately_delete_prop(nsn).await
     }
 }

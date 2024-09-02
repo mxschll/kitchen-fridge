@@ -1,11 +1,13 @@
 //! Some utility functions
 
 use std::collections::{HashMap, HashSet};
+use std::fmt::{self};
 use std::hash::Hash;
 use std::io::{stdin, stdout, Read, Write};
 use std::sync::{Arc, Mutex};
 
 use minidom::Element;
+use serde::{Deserialize, Serialize};
 use url::Url;
 
 use crate::item::SyncStatus;
@@ -144,4 +146,73 @@ pub fn pause() {
 pub fn random_url(parent_calendar: &Url) -> Url {
     let random = uuid::Uuid::new_v4().to_hyphenated().to_string();
     parent_calendar.join(&random).unwrap(/* this cannot panic since we've just created a string that is a valid URL */)
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, Hash, PartialEq)]
+pub struct NamespacedName {
+    pub xmlns: String,
+    pub name: String,
+}
+impl fmt::Display for NamespacedName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.xmlns.as_str())?;
+        fmt::Write::write_char(f, ':')?;
+        f.write_str(self.name.as_str())
+    }
+}
+
+/// A WebDAV property.
+///
+/// Similar to ical Property but allowing arbitrary namespaces and tracking of sync status
+/// This should allow for user-defined properties
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, Hash, PartialEq)]
+pub struct Property {
+    pub nsn: NamespacedName,
+    pub value: String,
+    pub sync_status: SyncStatus,
+}
+
+impl Property {
+    pub fn new<S1: ToString, S2: ToString>(xmlns: S1, name: S2, value: String) -> Self {
+        Self {
+            nsn: NamespacedName {
+                xmlns: xmlns.to_string(),
+                name: name.to_string(),
+            },
+            value,
+            sync_status: SyncStatus::NotSynced,
+        }
+    }
+
+    pub fn nsn(&self) -> &NamespacedName {
+        &self.nsn
+    }
+
+    pub fn xmlns(&self) -> &str {
+        self.nsn.xmlns.as_str()
+    }
+
+    pub fn name(&self) -> &str {
+        self.nsn.name.as_str()
+    }
+}
+
+impl fmt::Display for Property {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.xmlns())?;
+
+        fmt::Write::write_char(f, ':')?;
+
+        f.write_str(self.name())?;
+
+        fmt::Write::write_char(f, '=')?;
+
+        f.write_str(self.value.as_str())
+    }
+}
+
+impl Into<NamespacedName> for Property {
+    fn into(self) -> NamespacedName {
+        self.nsn
+    }
 }

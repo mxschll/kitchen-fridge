@@ -13,6 +13,7 @@ use crate::item::Item;
 use crate::item::SyncStatus;
 use crate::item::VersionTag;
 use crate::resource::Resource;
+use crate::utils::{NamespacedName, Property};
 
 /// This trait must be implemented by data sources (either local caches or remote CalDAV clients)
 ///
@@ -67,6 +68,16 @@ pub trait BaseCalendar {
     /// This replaces a given item at a given URL
     async fn update_item(&mut self, item: Item) -> KFResult<SyncStatus>;
 
+    /// Returns the requested WebDAV properties of the calendar collection.
+    async fn get_properties_by_name(
+        &self,
+        names: &[NamespacedName],
+    ) -> KFResult<Vec<Option<Property>>>;
+
+    async fn add_property(&mut self, prop: Property) -> KFResult<()>;
+
+    async fn update_property(&mut self, prop: Property) -> KFResult<()>;
+
     /// Returns whether this calDAV calendar supports to-do items
     fn supports_todo(&self) -> bool {
         self.supported_components()
@@ -105,6 +116,17 @@ pub trait DavCalendar: BaseCalendar {
 
     /// Delete an item
     async fn delete_item(&mut self, item_url: &Url) -> KFResult<()>;
+
+    /// Returns all known WebDAV properties of the calendar collection.
+    async fn get_properties(&self) -> KFResult<Vec<Property>>;
+
+    /// Returns the WebDAV property defined on the calendar collection.
+    async fn get_property(&self, nsn: &NamespacedName) -> KFResult<Option<Property>>;
+
+    /// Delete a property on the server.
+    ///
+    /// See also [`CompleteCalendar::mark_prop_for_deletion`] and [`CompleteCalendar::immediately_delete_prop`].
+    async fn delete_property(&mut self, nsn: &NamespacedName) -> KFResult<()>;
 
     /// Get the URLs of all current items in this calendar
     async fn get_item_urls(&self) -> KFResult<HashSet<Url>> {
@@ -146,6 +168,13 @@ pub trait CompleteCalendar: BaseCalendar {
     /// Returns a particular item
     async fn get_item_by_url_mut<'a>(&'a mut self, url: &Url) -> Option<&'a mut Item>;
 
+    /// Returns all known WebDAV properties of the calendar collection.
+    async fn get_properties(&self) -> &HashMap<NamespacedName, Property>;
+
+    async fn get_property_by_name(&self, name: &NamespacedName) -> Option<&Property>;
+
+    async fn get_property_by_name_mut(&mut self, name: &NamespacedName) -> Option<&mut Property>;
+
     /// Mark this calendar for deletion.
     /// This is required so that the upcoming sync will know it should also delete this calendar from the server
     /// (after which this object should be removed from its container)
@@ -159,6 +188,14 @@ pub trait CompleteCalendar: BaseCalendar {
     /// (and then call [`CompleteCalendar::immediately_delete_item`] once it has been successfully deleted on the server)
     async fn mark_item_for_deletion(&mut self, item_id: &Url) -> KFResult<()>;
 
-    /// Immediately remove an item. See [`CompleteCalendar::mark_for_deletion`]
+    /// Immediately remove an item. See [`CompleteCalendar::mark_item_for_deletion`]
     async fn immediately_delete_item(&mut self, item_id: &Url) -> KFResult<()>;
+
+    /// Mark a prop for deletion.
+    /// This is required so that the upcoming sync will know it should also also delete this prop from the server
+    /// (and then call [`CompleteCalendar::immediately_delete_prop`] once it has been successfully deleted on the server)
+    async fn mark_prop_for_deletion(&mut self, nsn: &NamespacedName) -> KFResult<()>;
+
+    /// Immediately remove a prop. See [`CompleteCalendar::mark_prop_for_deletion`]
+    async fn immediately_delete_prop(&mut self, nsn: &NamespacedName) -> KFResult<()>;
 }

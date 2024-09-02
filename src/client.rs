@@ -1,6 +1,6 @@
 //! This module provides a client to connect to a CalDAV server
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::convert::TryFrom;
 use std::sync::{Arc, Mutex};
 
@@ -19,7 +19,7 @@ use crate::resource::Resource;
 use crate::traits::BaseCalendar;
 use crate::traits::CalDavSource;
 use crate::traits::DavCalendar;
-use crate::utils::{find_elem, find_elems};
+use crate::utils::{find_elem, find_elems, Property};
 
 static DAVCLIENT_BODY: &str = r#"
     <d:propfind xmlns:d="DAV:">
@@ -48,6 +48,7 @@ static CAL_BODY: &str = r#"
        </d:prop>
     </d:propfind>
 "#;
+// <d:allprop/>
 
 pub(crate) async fn sub_request(
     resource: &Resource,
@@ -203,10 +204,12 @@ impl Client {
         Ok(chs_url)
     }
 
+    /// Based on a PROPFIND call, discovers accessible calendars on the server and instantiates RemoteCalendar's to
+    /// represent them.
     async fn populate_calendars(&self) -> KFResult<()> {
         let cal_home_set = self.get_cal_home_set().await?;
 
-        let reps = sub_request_and_extract_elems(
+        let responses = sub_request_and_extract_elems(
             &cal_home_set,
             "PROPFIND",
             CAL_BODY.to_string(),
@@ -214,14 +217,14 @@ impl Client {
         )
         .await?;
         let mut calendars = HashMap::new();
-        for rep in reps {
-            let display_name = find_elem(&rep, "displayname")
+        for response in responses {
+            let display_name = find_elem(&response, "displayname")
                 .map(|e| e.text())
                 .unwrap_or("<no name>".to_string());
             log::debug!("Considering calendar {}", display_name);
 
             // We filter out non-calendar items
-            let resource_types = match find_elem(&rep, "resourcetype") {
+            let resource_types = match find_elem(&response, "resourcetype") {
                 None => continue,
                 Some(rt) => rt,
             };
@@ -237,7 +240,8 @@ impl Client {
             }
 
             // We filter out the root calendar collection, that has an empty supported-calendar-component-set
-            let el_supported_comps = match find_elem(&rep, "supported-calendar-component-set") {
+            let el_supported_comps = match find_elem(&response, "supported-calendar-component-set")
+            {
                 None => continue,
                 Some(comps) => comps,
             };
@@ -245,7 +249,7 @@ impl Client {
                 continue;
             }
 
-            let calendar_href = match find_elem(&rep, "href") {
+            let calendar_href = match find_elem(&response, "href") {
                 None => {
                     log::warn!("Calendar {} has no URL! Ignoring it.", display_name);
                     continue;
@@ -268,11 +272,26 @@ impl Client {
                     Ok(sc) => sc,
                 };
 
-            let this_calendar_color = find_elem(&rep, "calendar-color").and_then(|col| {
+            let this_calendar_color = find_elem(&response, "calendar-color").and_then(|col| {
                 col.texts()
                     .next()
                     .and_then(|t| csscolorparser::parse(t).ok())
             });
+
+            // let all_properties = {
+            //     let mut all = Vec::new();
+            //     let propstat = find_elem(&response, "propstat").unwrap();
+            //     let prop = find_elem(&propstat, "prop").unwrap();
+            //     for prop_el in prop.children() {
+            //         let ns = prop_el.ns();
+            //         let name = prop_el.name();
+            //         let value = prop_el.text();
+
+            //         all.push(Property::new(ns, name, value));
+            //     }
+
+            //     all
+            // };
 
             let this_calendar = RemoteCalendar::new(
                 display_name,
@@ -323,6 +342,7 @@ impl CalDavSource<RemoteCalendar> for Client {
             .cloned()
     }
 
+    /// Makes a MKCALENDAR call to create a calendar on the server.
     async fn create_calendar(
         &mut self,
         url: Url,
@@ -349,7 +369,8 @@ impl CalDavSource<RemoteCalendar> for Client {
             });
         }
 
-        let creation_body = calendar_body(name, supported_components, color);
+        //NOTE This does not make use of `calendar_body`'s ability to define calendar properties in the MKCALENDAR call
+        let creation_body = calendar_body(name, supported_components, color, Default::default());
 
         let method = Method::from_bytes(b"MKCALENDAR").unwrap();
 
@@ -422,6 +443,7 @@ fn calendar_body(
     name: String,
     supported_components: SupportedComponents,
     color: Option<Color>,
+    properties: Vec<Property>,
 ) -> String {
     let color_property = match color {
         None => "".to_string(),
@@ -431,21 +453,77 @@ fn calendar_body(
         ),
     };
 
+    let set_namespaces: HashSet<String> =
+        properties.iter().map(|p| p.xmlns().to_string()).collect();
+
+    let mut available_syms: VecDeque<char> = "BCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+        .chars()
+        .collect();
+    let mut set_namespace_mappings = HashMap::new();
+
+    set_namespace_mappings.insert("DAV:".into(), 'A');
+
+    for ns in set_namespaces.into_iter() {
+        let sym = available_syms
+            .pop_back()
+            .expect("Ran out of namespace symbols");
+
+        set_namespace_mappings.insert(ns, sym);
+    }
+
+    let set_namespace_decls: String = {
+        let mut s = String::new();
+        for (k, v) in &set_namespace_mappings {
+            s.push(' ');
+            s.push_str(k.as_str());
+            s.push(':');
+            s.push('"');
+            s.push(*v);
+            s.push('"');
+        }
+        s
+    };
+
+    let other_props: String = {
+        let mut s = String::new();
+        for p in &properties {
+            // <{}:{}>{}</{}:{}>\n
+            let sym = set_namespace_mappings[&p.xmlns().to_string()];
+            s.push('<');
+            s.push(sym);
+            s.push(':');
+            s.push_str(p.name());
+            s.push('>');
+            s.push_str(p.value.as_str());
+            s.push('<');
+            s.push('/');
+            s.push(sym);
+            s.push(':');
+            s.push_str(p.name());
+            s.push('>');
+            s.push('\n');
+        }
+        s
+    };
+
     // This is taken from https://tools.ietf.org/html/rfc4791#page-24
     format!(
         r#"<?xml version="1.0" encoding="utf-8" ?>
         <B:mkcalendar xmlns:B="urn:ietf:params:xml:ns:caldav">
-            <A:set xmlns:A="DAV:">
+            <A:set{}>
                 <A:prop>
                     <A:displayname>{}</A:displayname>
+                    {}
                     {}
                     {}
                 </A:prop>
             </A:set>
         </B:mkcalendar>
         "#,
+        set_namespace_decls,
         name,
         color_property,
         supported_components.to_xml_string(),
+        other_props
     )
 }

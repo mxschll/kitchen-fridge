@@ -17,7 +17,7 @@ use crate::item::VersionTag;
 use crate::resource::Resource;
 use crate::traits::BaseCalendar;
 use crate::traits::DavCalendar;
-use crate::utils::find_elem;
+use crate::utils::{find_elem, NamespacedName, Property};
 
 static TASKS_BODY: &str = r#"
     <c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
@@ -90,6 +90,21 @@ impl BaseCalendar for RemoteCalendar {
     }
     fn color(&self) -> Option<&Color> {
         self.color.as_ref()
+    }
+
+    async fn get_properties_by_name(
+        &self,
+        names: &[NamespacedName],
+    ) -> KFResult<Vec<Option<Property>>> {
+        unimplemented!() //TODO
+    }
+
+    async fn add_property(&mut self, prop: Property) -> KFResult<()> {
+        unimplemented!() //TODO
+    }
+
+    async fn update_property(&mut self, prop: Property) -> KFResult<()> {
+        unimplemented!() //TODO
     }
 
     async fn add_item(&mut self, item: Item) -> KFResult<SyncStatus> {
@@ -362,5 +377,17 @@ impl DavCalendar for RemoteCalendar {
         }
 
         Ok(())
+    }
+
+    async fn get_properties(&self) -> KFResult<Vec<Property>> {
+        unimplemented!() //TODO
+    }
+
+    async fn get_property(&self, nsn: &NamespacedName) -> KFResult<Option<Property>> {
+        unimplemented!() //TODO
+    }
+
+    async fn delete_property(&mut self, nsn: &NamespacedName) -> KFResult<()> {
+        unimplemented!() //TODO
     }
 }

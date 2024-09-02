@@ -94,7 +94,7 @@ impl Item {
 }
 
 /// A VersionTag is basically a CalDAV `ctag` or `etag`. Whenever it changes, this means the data has changed.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Eq, Hash)]
 pub struct VersionTag {
     tag: String,
 }
@@ -120,7 +120,7 @@ impl VersionTag {
 }
 
 /// Describes whether this item has been synced already, or modified since the last time it was synced
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Eq, Hash)]
 pub enum SyncStatus {
     /// This item has been locally created, and never synced yet
     NotSynced,

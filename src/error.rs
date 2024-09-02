@@ -3,7 +3,12 @@ use std::error::Error;
 use reqwest::StatusCode;
 use url::Url;
 
-use crate::{calendar::remote_calendar::RemoteCalendarError, ical::IcalParseError, item::ItemType};
+use crate::{
+    calendar::remote_calendar::RemoteCalendarError,
+    ical::IcalParseError,
+    item::ItemType,
+    utils::{NamespacedName, Property},
+};
 
 #[derive(Clone, Debug)]
 pub enum HttpStatusConstraint {
@@ -60,6 +65,12 @@ pub enum KFError {
     #[error("Error parsing ical data: {0}")]
     IcalParseError(#[from] IcalParseError),
 
+    #[error("Invalid property URL: {bad_url}; from {source}")]
+    InvalidPropertyUrl {
+        source: url::ParseError,
+        bad_url: String,
+    },
+
     #[error("{detail}; an IO error occurred: {source}")]
     IoError {
         detail: String,
@@ -94,6 +105,12 @@ pub enum KFError {
     #[error("An error occurred while mocking behavior: {0}")]
     #[cfg(feature = "local_calendar_mocks_remote_calendars")]
     MockError(#[from] crate::mock_behaviour::MockError),
+
+    #[error("Property already exists: {0}")]
+    PropertyAlreadyExists(Property),
+
+    #[error("Property does not exists: {0}")]
+    PropertyDoesNotExist(NamespacedName),
 
     #[error("Remote calendar error: {0}")]
     RemoteCalendarError(#[from] RemoteCalendarError),

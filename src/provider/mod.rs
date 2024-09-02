@@ -11,9 +11,10 @@ use itertools::Itertools;
 use url::Url;
 
 use crate::error::KFResult;
-use crate::item::SyncStatus;
+use crate::item::{SyncStatus, VersionTag};
 use crate::traits::CompleteCalendar;
 use crate::traits::{BaseCalendar, CalDavSource, DavCalendar};
+use crate::utils::{NamespacedName, Property};
 
 pub mod sync_progress;
 use sync_progress::SyncProgress;
@@ -40,6 +41,24 @@ impl Display for BatchDownloadType {
             Self::RemoteChanges => write!(f, "remote changes"),
         }
     }
+}
+
+struct ItemChanges {
+    local_item_dels: HashSet<Url>,
+    remote_item_dels: HashSet<Url>,
+    local_item_changes: HashSet<Url>,
+    remote_item_changes: HashSet<Url>,
+    local_item_additions: HashSet<Url>,
+    remote_item_additions: HashSet<Url>,
+}
+
+struct PropChanges {
+    local_prop_dels: HashSet<NamespacedName>,
+    remote_prop_dels: HashSet<NamespacedName>,
+    local_prop_changes: HashSet<Property>,
+    remote_prop_changes: HashSet<Property>,
+    local_prop_additions: HashSet<Property>,
+    remote_prop_additions: HashSet<Property>,
 }
 
 /// A data source that combines two `CalDavSource`s, which is able to sync both sources.
@@ -231,8 +250,8 @@ where
 
         progress.info(&format!("Syncing calendar {}", cal_name));
         progress.reset_counter();
-        progress.feedback(SyncEvent::InProgress {
-            calendar: cal_name.clone(),
+        progress.feedback(SyncEvent::ItemsInProgress {
+            calendar_name: cal_name.clone(),
             items_done_already: 0,
             details: "started".to_string(),
         });
@@ -252,6 +271,46 @@ where
 
         // Step 1 - find the differences
         progress.debug("Finding the differences to sync...");
+
+        // - Step 1.1 - find the differences in items
+        let item_changes =
+            Self::calculate_item_changes(&cal_local, &cal_remote, progress, cal_name.clone())
+                .await?;
+
+        // - Step 1.2 - find the differences in properties
+        let prop_changes =
+            Self::calculate_prop_changes(&cal_local, &cal_remote, progress, cal_name.clone())
+                .await?;
+
+        // Step 2 - commit changes to tasks
+        Self::commit_item_changes(
+            &mut cal_local,
+            &mut cal_remote,
+            progress,
+            cal_name.clone(),
+            item_changes,
+        )
+        .await?;
+
+        // Step 3 - commit changes to props
+        Self::commit_prop_changes(
+            &mut cal_local,
+            &mut cal_remote,
+            progress,
+            cal_name.clone(),
+            prop_changes,
+        )
+        .await?;
+
+        Ok(())
+    }
+
+    async fn calculate_item_changes(
+        cal_local: &T,
+        cal_remote: &U,
+        progress: &mut SyncProgress,
+        cal_name: String,
+    ) -> KFResult<ItemChanges> {
         let mut local_item_dels = HashSet::new();
         let mut remote_item_dels = HashSet::new();
         let mut local_item_changes = HashSet::new();
@@ -260,8 +319,8 @@ where
         let mut remote_item_additions = HashSet::new();
 
         let remote_items = cal_remote.get_item_version_tags().await?;
-        progress.feedback(SyncEvent::InProgress {
-            calendar: cal_name.clone(),
+        progress.feedback(SyncEvent::ItemsInProgress {
+            calendar_name: cal_name.clone(),
             items_done_already: 0,
             details: format!("{} remote items", remote_items.len()),
         });
@@ -361,18 +420,169 @@ where
             }
         }
 
-        // Step 2 - commit changes
-        progress.trace("Committing changes...");
+        Ok(ItemChanges {
+            local_item_dels,
+            remote_item_dels,
+            local_item_changes,
+            remote_item_changes,
+            local_item_additions,
+            remote_item_additions,
+        })
+    }
+
+    async fn calculate_prop_changes(
+        cal_local: &T,
+        cal_remote: &U,
+        progress: &mut SyncProgress,
+        cal_name: String,
+    ) -> KFResult<PropChanges> {
+        let mut local_prop_dels: HashSet<NamespacedName> = HashSet::new();
+        let mut remote_prop_dels: HashSet<NamespacedName> = HashSet::new();
+        let mut local_prop_changes: HashSet<Property> = HashSet::new();
+        let mut remote_prop_changes: HashSet<Property> = HashSet::new();
+        let mut local_prop_additions: HashSet<Property> = HashSet::new();
+        let mut remote_prop_additions: HashSet<Property> = HashSet::new();
+
+        let remote_props = cal_remote.get_properties().await?;
+
+        progress.feedback(SyncEvent::PropsInProgress {
+            calendar_name: cal_name.clone(),
+            props_done_already: 0,
+            details: format!("{} remote properties", remote_props.len()),
+        });
+
+        let mut local_props_to_handle: HashSet<Property> =
+            cal_local.get_properties().await.values().cloned().collect();
+
+        for remote_prop in remote_props {
+            progress.trace(&format!("***** Considering remote prop {}...", remote_prop));
+            match cal_local.get_property_by_name(remote_prop.nsn()).await {
+                None => {
+                    // This was created on the remote
+                    progress.debug(&format!("*   {} is a remote addition", remote_prop));
+                    remote_prop_additions.insert(remote_prop);
+                }
+                Some(local_prop) => {
+                    if !local_props_to_handle.remove(&remote_prop) {
+                        progress.error(&format!(
+                            "Inconsistent state: missing prop {} from the local props",
+                            remote_prop
+                        ));
+                    }
+
+                    let prop_name: NamespacedName = local_prop.clone().into();
+
+                    match &local_prop.sync_status {
+                        SyncStatus::NotSynced => {
+                            progress.error(&format!("Property reuse between remote and local sources ({}). Ignoring this item in the sync", prop_name));
+                            continue;
+                        }
+                        SyncStatus::Synced(local_tag) => {
+                            if remote_prop.value.as_str() != local_tag.as_str() {
+                                // This has been modified on the remote
+                                progress.debug(&format!("*   {} is a remote change", remote_prop));
+                                remote_prop_changes.insert(remote_prop);
+                            }
+                        }
+                        SyncStatus::LocallyModified(local_tag) => {
+                            if remote_prop.value.as_str() == local_tag.as_str() {
+                                // This has been changed locally
+                                progress.debug(&format!("*   {} is a local change", remote_prop));
+                                local_prop_changes.insert(remote_prop);
+                            } else {
+                                progress.info(&format!("Conflict: prop {} has been modified in both sources. Using the remote version.", prop_name));
+                                progress.debug(&format!(
+                                    "*   {} is considered a remote change",
+                                    remote_prop
+                                ));
+                                remote_prop_changes.insert(remote_prop);
+                            }
+                        }
+                        SyncStatus::LocallyDeleted(local_tag) => {
+                            if remote_prop.value.as_str() == local_tag.as_str() {
+                                // This has been locally deleted
+                                progress.debug(&format!("*   {} is a local deletion", remote_prop));
+                                local_prop_dels.insert(prop_name);
+                            } else {
+                                progress.info(&format!("Conflict: prop {} has been locally deleted and remotely modified. Reverting to the remote version.", prop_name));
+                                progress.debug(&format!(
+                                    "*   {} is a considered a remote change",
+                                    remote_prop
+                                ));
+                                remote_prop_changes.insert(remote_prop);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Also iterate on the local props that are not on the remote
+        for local_prop in local_props_to_handle {
+            progress.trace(&format!("##### Considering local prop {}...", local_prop));
+            let prop_name: NamespacedName = local_prop.clone().into();
+            match local_prop.sync_status {
+                SyncStatus::Synced(_) => {
+                    // This item has been removed from the remote
+                    progress.debug(&format!("#   {} is a deletion from the server", local_prop));
+                    remote_prop_dels.insert(prop_name);
+                }
+                SyncStatus::NotSynced => {
+                    // This item has just been locally created
+                    progress.debug(&format!("#   {} has been locally created", local_prop));
+                    local_prop_additions.insert(local_prop);
+                }
+                SyncStatus::LocallyDeleted(_) => {
+                    // This item has been deleted from both sources
+                    progress.debug(&format!(
+                        "#   {} has been deleted from both sources",
+                        local_prop
+                    ));
+                    remote_prop_dels.insert(prop_name);
+                }
+                SyncStatus::LocallyModified(_) => {
+                    progress.info(&format!("Conflict: prop {} has been deleted from the server and locally modified. Deleting the local copy", prop_name));
+                    remote_prop_dels.insert(prop_name);
+                }
+            }
+        }
+
+        Ok(PropChanges {
+            local_prop_dels,
+            remote_prop_dels,
+            local_prop_changes,
+            remote_prop_changes,
+            local_prop_additions,
+            remote_prop_additions,
+        })
+    }
+
+    async fn commit_item_changes(
+        cal_local: &mut T,
+        cal_remote: &mut U,
+        progress: &mut SyncProgress,
+        cal_name: String,
+        item_changes: ItemChanges,
+    ) -> KFResult<()> {
+        let ItemChanges {
+            local_item_dels,
+            remote_item_dels,
+            local_item_changes,
+            remote_item_changes,
+            local_item_additions,
+            remote_item_additions,
+        } = item_changes;
+        progress.trace("Committing changes to tasks...");
         for url_del in local_item_dels {
             progress.debug(&format!(
                 "> Pushing local deletion {} to the server",
                 url_del
             ));
             progress.increment_counter(1);
-            progress.feedback(SyncEvent::InProgress {
-                calendar: cal_name.clone(),
+            progress.feedback(SyncEvent::ItemsInProgress {
+                calendar_name: cal_name.clone(),
                 items_done_already: progress.counter(),
-                details: Self::item_name(&cal_local, &url_del).await,
+                details: Self::item_name(cal_local, &url_del).await,
             });
 
             match cal_remote.delete_item(&url_del).await {
@@ -397,17 +607,17 @@ where
         for url_del in remote_item_dels {
             progress.debug(&format!("> Applying remote deletion {} locally", url_del));
             progress.increment_counter(1);
-            progress.feedback(SyncEvent::InProgress {
-                calendar: cal_name.clone(),
+            progress.feedback(SyncEvent::ItemsInProgress {
+                calendar_name: cal_name.clone(),
                 items_done_already: progress.counter(),
-                details: Self::item_name(&cal_local, &url_del).await,
+                details: Self::item_name(cal_local, &url_del).await,
             });
             if let Err(err) = cal_local.immediately_delete_item(&url_del).await {
                 progress.warn(&format!("Unable to delete local item {}: {}", url_del, err));
             }
         }
 
-        Self::apply_remote_additions(
+        Self::apply_remote_item_additions(
             remote_item_additions,
             &mut *cal_local,
             &mut *cal_remote,
@@ -416,7 +626,7 @@ where
         )
         .await;
 
-        Self::apply_remote_changes(
+        Self::apply_remote_item_changes(
             remote_item_changes,
             &mut *cal_local,
             &mut *cal_remote,
@@ -431,10 +641,10 @@ where
                 url_add
             ));
             progress.increment_counter(1);
-            progress.feedback(SyncEvent::InProgress {
-                calendar: cal_name.clone(),
+            progress.feedback(SyncEvent::ItemsInProgress {
+                calendar_name: cal_name.clone(),
                 items_done_already: progress.counter(),
-                details: Self::item_name(&cal_local, &url_add).await,
+                details: Self::item_name(cal_local, &url_add).await,
             });
             match cal_local.get_item_by_url_mut(&url_add).await {
                 None => {
@@ -462,10 +672,10 @@ where
                 url_change
             ));
             progress.increment_counter(1);
-            progress.feedback(SyncEvent::InProgress {
-                calendar: cal_name.clone(),
+            progress.feedback(SyncEvent::ItemsInProgress {
+                calendar_name: cal_name.clone(),
                 items_done_already: progress.counter(),
-                details: Self::item_name(&cal_local, &url_change).await,
+                details: Self::item_name(cal_local, &url_change).await,
             });
             match cal_local.get_item_by_url_mut(&url_change).await {
                 None => {
@@ -490,6 +700,156 @@ where
         Ok(())
     }
 
+    async fn commit_prop_changes(
+        cal_local: &mut T,
+        cal_remote: &mut U,
+        progress: &mut SyncProgress,
+        cal_name: String,
+        prop_changes: PropChanges,
+    ) -> KFResult<()> {
+        let PropChanges {
+            local_prop_dels,
+            remote_prop_dels,
+            local_prop_changes,
+            remote_prop_changes,
+            local_prop_additions,
+            remote_prop_additions,
+        } = prop_changes;
+        progress.trace("Committing changes to props...");
+
+        for prop_del in local_prop_dels {
+            progress.debug(&format!(
+                "> Pushing local prop deletion {} to the server",
+                prop_del
+            ));
+            progress.increment_counter(1);
+            progress.feedback(SyncEvent::PropsInProgress {
+                calendar_name: cal_name.clone(),
+                props_done_already: progress.counter(),
+                details: format!("{}", prop_del),
+            });
+
+            match cal_remote.delete_property(&prop_del).await {
+                Err(err) => {
+                    progress.warn(&format!(
+                        "Unable to delete remote prop {}: {}",
+                        prop_del, err
+                    ));
+                }
+                Ok(()) => {
+                    // Change the local copy from "marked to deletion" to "actually deleted"
+                    if let Err(err) = cal_local.immediately_delete_prop(&prop_del).await {
+                        progress.error(&format!(
+                            "Unable to permanently delete local prop {}: {}",
+                            prop_del, err
+                        ));
+                    }
+                }
+            }
+        }
+
+        for prop_del in remote_prop_dels {
+            progress.debug(&format!("> Applying remote deletion {} locally", prop_del));
+            progress.increment_counter(1);
+            progress.feedback(SyncEvent::PropsInProgress {
+                calendar_name: cal_name.clone(),
+                props_done_already: progress.counter(),
+                details: format!("{}", prop_del),
+            });
+            if let Err(err) = cal_local.immediately_delete_prop(&prop_del).await {
+                progress.warn(&format!(
+                    "Unable to delete local prop {}: {}",
+                    prop_del, err
+                ));
+            }
+        }
+
+        Self::apply_remote_prop_additions(
+            remote_prop_additions,
+            &mut *cal_local,
+            &mut *cal_remote,
+            progress,
+            &cal_name,
+        )
+        .await;
+
+        Self::apply_remote_prop_changes(
+            remote_prop_changes,
+            &mut *cal_local,
+            &mut *cal_remote,
+            progress,
+            &cal_name,
+        )
+        .await;
+
+        for prop_add in local_prop_additions {
+            progress.debug(&format!(
+                "> Pushing local addition {} to the server",
+                prop_add
+            ));
+            progress.increment_counter(1);
+            progress.feedback(SyncEvent::PropsInProgress {
+                calendar_name: cal_name.clone(),
+                props_done_already: progress.counter(),
+                details: format!("{}", prop_add),
+            });
+
+            match cal_local.get_property_by_name_mut(prop_add.nsn()).await {
+                None => {
+                    progress.error(&format!("Inconsistency: created prop {} has been marked for upload but is locally missing", prop_add));
+                    continue;
+                }
+                Some(prop) => {
+                    match cal_remote.add_property(prop.clone()).await {
+                        Err(err) => progress.error(&format!(
+                            "Unable to add prop {} to remote calendar: {}",
+                            prop_add, err
+                        )),
+                        Ok(_) => {
+                            // Update local sync status
+                            prop.sync_status =
+                                SyncStatus::Synced(VersionTag::from(prop.value.clone()));
+                        }
+                    }
+                }
+            };
+        }
+
+        for prop_change in local_prop_changes {
+            progress.debug(&format!(
+                "> Pushing local change {} to the server",
+                prop_change
+            ));
+            progress.increment_counter(1);
+            progress.feedback(SyncEvent::PropsInProgress {
+                calendar_name: cal_name.clone(),
+                props_done_already: progress.counter(),
+                details: format!("{}", prop_change),
+            });
+            match cal_local.get_property_by_name_mut(prop_change.nsn()).await {
+                None => {
+                    progress.error(&format!("Inconsistency: modified prop {} has been marked for upload but is locally missing", prop_change));
+                    continue;
+                }
+                Some(prop) => {
+                    match cal_remote.update_property(prop.clone()).await {
+                        Err(err) => progress.error(&format!(
+                            "Unable to update prop {} in remote calendar: {}",
+                            prop_change, err
+                        )),
+                        Ok(_) => {
+                            // Update local sync status
+                            prop.sync_status =
+                                SyncStatus::Synced(VersionTag::from(prop.value.clone()));
+                        }
+                    };
+                }
+            };
+        }
+
+        Ok(())
+    }
+
     async fn item_name(cal: &T, url: &Url) -> String {
         cal.get_item_by_url(url)
             .await
@@ -498,7 +858,7 @@ where
             .to_string()
     }
 
-    async fn apply_remote_additions(
+    async fn apply_remote_item_additions(
         mut remote_additions: HashSet<Url>,
         cal_local: &mut T,
         cal_remote: &mut U,
@@ -510,7 +870,7 @@ where
             .chunks(DOWNLOAD_BATCH_SIZE)
             .into_iter()
         {
-            Self::fetch_batch_and_apply(
+            Self::fetch_batch_and_apply_items(
                 BatchDownloadType::RemoteAdditions,
                 batch,
                 cal_local,
@@ -522,7 +882,7 @@ where
         }
     }
 
-    async fn apply_remote_changes(
+    async fn apply_remote_item_changes(
         mut remote_changes: HashSet<Url>,
         cal_local: &mut T,
         cal_remote: &mut U,
@@ -534,7 +894,7 @@ where
             .chunks(DOWNLOAD_BATCH_SIZE)
             .into_iter()
         {
-            Self::fetch_batch_and_apply(
+            Self::fetch_batch_and_apply_items(
                 BatchDownloadType::RemoteChanges,
                 batch,
                 cal_local,
@@ -546,7 +906,7 @@ where
         }
     }
 
-    async fn fetch_batch_and_apply<I: Iterator<Item = Url>>(
+    async fn fetch_batch_and_apply_items<I: Iterator<Item = Url>>(
         batch_type: BatchDownloadType,
         remote_additions: I,
         cal_local: &mut T,
@@ -597,10 +957,119 @@ where
                     None => String::from("<unable to get the name of the first batched item>"),
                 };
                 progress.increment_counter(list_of_additions.len());
-                progress.feedback(SyncEvent::InProgress {
-                    calendar: cal_name.to_string(),
+                progress.feedback(SyncEvent::ItemsInProgress {
+                    calendar_name: cal_name.to_string(),
                     items_done_already: progress.counter(),
                     details: one_item_name,
+                });
+            }
+        }
+    }
+
+    async fn apply_remote_prop_additions(
+        mut remote_additions: HashSet<Property>,
+        cal_local: &mut T,
+        cal_remote: &mut U,
+        progress: &mut SyncProgress,
+        cal_name: &str,
+    ) {
+        for batch in remote_additions
+            .drain()
+            .chunks(DOWNLOAD_BATCH_SIZE)
+            .into_iter()
+        {
+            Self::fetch_batch_and_apply_props(
+                BatchDownloadType::RemoteAdditions,
+                batch,
+                cal_local,
+                cal_remote,
+                progress,
+                cal_name,
+            )
+            .await;
+        }
+    }
+
+    async fn apply_remote_prop_changes(
+        mut remote_changes: HashSet<Property>,
+        cal_local: &mut T,
+        cal_remote: &mut U,
+        progress: &mut SyncProgress,
+        cal_name: &str,
+    ) {
+        for batch in remote_changes
+            .drain()
+            .chunks(DOWNLOAD_BATCH_SIZE)
+            .into_iter()
+        {
+            Self::fetch_batch_and_apply_props(
+                BatchDownloadType::RemoteChanges,
+                batch,
+                cal_local,
+                cal_remote,
+                progress,
+                cal_name,
+            )
+            .await;
+        }
+    }
+
+    async fn fetch_batch_and_apply_props<I: Iterator<Item = Property>>(
+        batch_type: BatchDownloadType,
+        remote_additions: I,
+        cal_local: &mut T,
+        cal_remote: &mut U,
+        progress: &mut SyncProgress,
+        cal_name: &str,
+    ) {
+        progress.debug(&format!("> Applying a batch of {} locally", batch_type) /* too bad Chunks does not implement ExactSizeIterator, that could provide useful debug info. See https://github.com/rust-itertools/itertools/issues/171 */);
+
+        let list_of_additions: Vec<Property> = remote_additions.collect();
+        let addition_names: Vec<NamespacedName> =
+            list_of_additions.iter().map(|p| p.nsn()).cloned().collect();
+        match cal_remote.get_properties_by_name(&addition_names).await {
+            Err(err) => {
+                progress.warn(&format!(
+                    "Unable to get the batch of {} {:?}: {}. Skipping them.",
+                    batch_type, list_of_additions, err
+                ));
+            }
+            Ok(props) => {
+                for prop in props {
+                    match prop {
+                        None => {
+                            progress.error("Inconsistency: an item from the batch has vanished from the remote end");
+                            continue;
+                        }
+                        Some(new_prop) => {
+                            let local_update_result = match batch_type {
+                                BatchDownloadType::RemoteAdditions => {
+                                    cal_local.add_property(new_prop.clone()).await
+                                }
+                                BatchDownloadType::RemoteChanges => {
+                                    cal_local.update_property(new_prop.clone()).await
+                                }
+                            };
+                            if let Err(err) = local_update_result {
+                                progress.error(&format!(
+                                    "Not able to add property {} to local calendar: {}",
+                                    new_prop, err
+                                ));
+                            }
+                        }
+                    }
+                }
+
+                // Notifying every prop at the same time would not make sense. Let's notify only one of them
+                let one_prop_name = match list_of_additions.first() {
+                    Some(prop) => prop.to_string(),
+                    None => String::from("<unable to get the name of the first batched prop>"),
+                };
+                progress.increment_counter(list_of_additions.len());
+                progress.feedback(SyncEvent::PropsInProgress {
+                    calendar_name: cal_name.to_string(),
+                    props_done_already: progress.counter(),
+                    details: one_prop_name,
                 });
             }
         }
