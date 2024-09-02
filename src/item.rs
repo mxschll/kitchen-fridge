@@ -122,7 +122,7 @@ impl VersionTag {
 /// Describes whether this item has been synced already, or modified since the last time it was synced
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum SyncStatus {
-    /// This item has ben locally created, and never synced yet
+    /// This item has been locally created, and never synced yet
     NotSynced,
     /// At the time this item has ben synced, it has a given version tag, and has not been locally modified since then.
     /// Note: in integration tests, in case we are mocking a remote calendar by a local calendar, this is the only valid variant (remote calendars make no distinction between all these variants)
