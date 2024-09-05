@@ -1,6 +1,6 @@
 //! Some utility functions
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt::{self};
 use std::hash::Hash;
 use std::io::{stdin, stdout, Read, Write};
@@ -153,11 +153,75 @@ pub struct NamespacedName {
     pub xmlns: String,
     pub name: String,
 }
+impl NamespacedName {
+    pub fn new<S1: ToString, S2: ToString>(xmlns: S1, name: S2) -> Self {
+        Self {
+            xmlns: xmlns.to_string(),
+            name: name.to_string(),
+        }
+    }
+}
 impl fmt::Display for NamespacedName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.xmlns.as_str())?;
         fmt::Write::write_char(f, ':')?;
         f.write_str(self.name.as_str())
+    }
+}
+
+/// Utility to track XML namespace symbol mappings, as used in xmlns attribute declarations
+///
+/// Includes a default mapping of xmlns:d="DAV:"
+pub(crate) struct Namespaces {
+    available_syms: VecDeque<char>,
+    mapping: HashMap<String, char>,
+}
+
+impl Namespaces {
+    pub(crate) fn new() -> Self {
+        let mut mapping = HashMap::new();
+        mapping.insert("DAV:".into(), 'd');
+
+        Self {
+            available_syms: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcefghijklmnopqrstuvwxyz" //NOTE the missing 'd'
+                .chars()
+                .collect(),
+            mapping,
+        }
+    }
+
+    /// Maps the namespace to an unassigned symbol and returns it
+    pub(crate) fn add<S: ToString>(&mut self, ns: S) -> char {
+        let sym = self
+            .available_syms
+            .pop_back()
+            .expect("Ran out of namespace symbols");
+
+        self.mapping.insert(ns.to_string(), sym);
+
+        sym
+    }
+
+    pub(crate) fn decl(&self) -> String {
+        let mut s = String::new();
+        for (k, v) in &self.mapping {
+            s.push(' ');
+            s.push_str("xmlns:");
+            s.push(*v);
+            s.push('=');
+            s.push('"');
+            s.push_str(k.as_str());
+            s.push('"');
+        }
+        s
+    }
+
+    pub(crate) fn prefixes(&self) -> std::collections::hash_map::Values<String, char> {
+        self.mapping.values()
+    }
+
+    pub(crate) fn sym(&self, ns: &String) -> Option<char> {
+        self.mapping.get(ns).cloned()
     }
 }
 

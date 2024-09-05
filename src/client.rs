@@ -1,6 +1,6 @@
 //! This module provides a client to connect to a CalDAV server
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::sync::{Arc, Mutex};
 
@@ -19,7 +19,7 @@ use crate::resource::Resource;
 use crate::traits::BaseCalendar;
 use crate::traits::CalDavSource;
 use crate::traits::DavCalendar;
-use crate::utils::{find_elem, find_elems, Property};
+use crate::utils::{find_elem, find_elems, Namespaces, Property};
 
 static DAVCLIENT_BODY: &str = r#"
     <d:propfind xmlns:d="DAV:">
@@ -453,42 +453,17 @@ fn calendar_body(
         ),
     };
 
-    let set_namespaces: HashSet<String> =
-        properties.iter().map(|p| p.xmlns().to_string()).collect();
+    let mut namespaces = Namespaces::new();
 
-    let mut available_syms: VecDeque<char> = "BCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
-        .chars()
-        .collect();
-    let mut set_namespace_mappings = HashMap::new();
-
-    set_namespace_mappings.insert("DAV:".into(), 'A');
-
-    for ns in set_namespaces.into_iter() {
-        let sym = available_syms
-            .pop_back()
-            .expect("Ran out of namespace symbols");
-
-        set_namespace_mappings.insert(ns, sym);
+    for p in &properties {
+        namespaces.add(p.xmlns());
     }
-
-    let set_namespace_decls: String = {
-        let mut s = String::new();
-        for (k, v) in &set_namespace_mappings {
-            s.push(' ');
-            s.push_str(k.as_str());
-            s.push(':');
-            s.push('"');
-            s.push(*v);
-            s.push('"');
-        }
-        s
-    };
 
     let other_props: String = {
         let mut s = String::new();
-        for p in &properties {
+        for p in properties {
             // <{}:{}>{}</{}:{}>\n
-            let sym = set_namespace_mappings[&p.xmlns().to_string()];
+            let sym = namespaces.sym(&p.xmlns().to_string()).unwrap();
             s.push('<');
             s.push(sym);
             s.push(':');
@@ -520,7 +495,7 @@ fn calendar_body(
             </A:set>
         </B:mkcalendar>
         "#,
-        set_namespace_decls,
+        namespaces.decl(),
         name,
         color_property,
         supported_components.to_xml_string(),
