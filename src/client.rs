@@ -48,7 +48,6 @@ static CAL_BODY: &str = r#"
        </d:prop>
     </d:propfind>
 "#;
-// <d:allprop/>
 
 pub(crate) async fn sub_request(
     resource: &Resource,
@@ -463,18 +462,15 @@ fn calendar_body(
         let mut s = String::new();
         for p in properties {
             // <{}:{}>{}</{}:{}>\n
-            let sym = namespaces.sym(&p.xmlns().to_string()).unwrap();
+
+            let symbolized = p.nsn().with_symbolized_prefix(&namespaces);
             s.push('<');
-            s.push(sym);
-            s.push(':');
-            s.push_str(p.name());
+            s.push_str(symbolized.as_str());
             s.push('>');
             s.push_str(p.value.as_str());
             s.push('<');
             s.push('/');
-            s.push(sym);
-            s.push(':');
-            s.push_str(p.name());
+            s.push_str(symbolized.as_str());
             s.push('>');
             s.push('\n');
         }

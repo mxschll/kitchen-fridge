@@ -149,16 +149,23 @@ pub fn random_url(parent_calendar: &Url) -> Url {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, Hash, PartialEq)]
-pub struct NamespacedName {
+pub(crate) struct NamespacedName {
     pub xmlns: String,
     pub name: String,
 }
 impl NamespacedName {
-    pub fn new<S1: ToString, S2: ToString>(xmlns: S1, name: S2) -> Self {
+    pub(crate) fn new<S1: ToString, S2: ToString>(xmlns: S1, name: S2) -> Self {
         Self {
             xmlns: xmlns.to_string(),
             name: name.to_string(),
         }
+    }
+
+    /// Uses namespace mappings to simplify the representation of this name
+    /// For example, https://example.com/api/item becomes b:item if namespace https://example.com/api/ has symbol b in the namespace mapping
+    pub(crate) fn with_symbolized_prefix(&self, namespaces: &Namespaces) -> String {
+        let sym = namespaces.sym(&self.xmlns).unwrap();
+        format!("{}:{}", sym, self.name)
     }
 }
 impl fmt::Display for NamespacedName {
