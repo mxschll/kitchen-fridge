@@ -74,9 +74,8 @@ pub trait BaseCalendar {
         names: &[NamespacedName],
     ) -> KFResult<Vec<Option<Property>>>;
 
-    async fn add_property(&mut self, prop: Property) -> KFResult<()>;
-
-    async fn update_property(&mut self, prop: Property) -> KFResult<()>;
+    /// Sets the property with namespace and name prop.nsn() to have value prop.value
+    async fn set_property(&mut self, prop: Property) -> KFResult<()>;
 
     /// Returns whether this calDAV calendar supports to-do items
     fn supports_todo(&self) -> bool {
@@ -174,6 +173,12 @@ pub trait CompleteCalendar: BaseCalendar {
     async fn get_property_by_name(&self, name: &NamespacedName) -> Option<&Property>;
 
     async fn get_property_by_name_mut(&mut self, name: &NamespacedName) -> Option<&mut Property>;
+
+    /// Adds a property; error if it already exists
+    async fn add_property(&mut self, prop: Property) -> KFResult<()>;
+
+    /// Updates a property; error if it does not exist
+    async fn update_property(&mut self, prop: Property) -> KFResult<()>;
 
     /// Mark this calendar for deletion.
     /// This is required so that the upcoming sync will know it should also delete this calendar from the server

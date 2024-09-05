@@ -800,7 +800,7 @@ where
                     continue;
                 }
                 Some(prop) => {
-                    match cal_remote.add_property(prop.clone()).await {
+                    match cal_remote.set_property(prop.clone()).await {
                         Err(err) => progress.error(&format!(
                             "Unable to add prop {} to remote calendar: {}",
                             prop_add, err
@@ -832,7 +832,7 @@ where
                     continue;
                 }
                 Some(prop) => {
-                    match cal_remote.update_property(prop.clone()).await {
+                    match cal_remote.set_property(prop.clone()).await {
                         Err(err) => progress.error(&format!(
                             "Unable to update prop {} in remote calendar: {}",
                             prop_change, err

@@ -263,24 +263,14 @@ impl BaseCalendar for CachedCalendar {
         self.color.as_ref()
     }
 
-    async fn add_property(&mut self, prop: Property) -> KFResult<()> {
-        if self.properties.contains_key(prop.nsn()) {
-            return Err(KFError::PropertyAlreadyExists(prop));
-        }
-
-        self.properties.insert(prop.nsn().clone(), prop);
-
-        Ok(())
-    }
-
-    async fn update_property(&mut self, prop: Property) -> KFResult<()> {
+    async fn set_property(&mut self, prop: Property) -> KFResult<()> {
         if let Some(p) = self.properties.get_mut(prop.nsn()) {
             //NOTE Should be okay since the key remains the same, thus the hash remains the same
             *p = prop;
-            Ok(())
         } else {
-            Err(KFError::PropertyDoesNotExist(prop.nsn))
+            self.properties.insert(prop.nsn().clone(), prop);
         }
+        Ok(())
     }
 
     async fn get_properties_by_name(
@@ -353,6 +343,26 @@ impl CompleteCalendar for CachedCalendar {
 
     async fn get_property_by_name_mut(&mut self, name: &NamespacedName) -> Option<&mut Property> {
         self.properties.get_mut(name)
+    }
+
+    async fn add_property(&mut self, prop: Property) -> KFResult<()> {
+        if self.properties.contains_key(prop.nsn()) {
+            return Err(KFError::PropertyAlreadyExists(prop));
+        }
+
+        self.properties.insert(prop.nsn().clone(), prop);
+
+        Ok(())
+    }
+
+    async fn update_property(&mut self, prop: Property) -> KFResult<()> {
+        if let Some(p) = self.properties.get_mut(prop.nsn()) {
+            //NOTE Should be okay since the key remains the same, thus the hash remains the same
+            *p = prop;
+            Ok(())
+        } else {
+            Err(KFError::PropertyDoesNotExist(prop.nsn))
+        }
     }
 
     async fn mark_for_deletion(&mut self) {

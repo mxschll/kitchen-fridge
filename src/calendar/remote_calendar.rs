@@ -99,12 +99,44 @@ impl BaseCalendar for RemoteCalendar {
         unimplemented!() //TODO
     }
 
-    async fn add_property(&mut self, prop: Property) -> KFResult<()> {
-        unimplemented!() //TODO
-    }
+    async fn set_property(&mut self, prop: Property) -> KFResult<()> {
+        let method: Method = "PROPPATCH".parse().expect("invalid method name");
+        let url = self.url().clone();
 
-    async fn update_property(&mut self, prop: Property) -> KFResult<()> {
-        unimplemented!() //TODO
+        let propertyupdate = format!(
+            r#"<?xml version="1.0" encoding="utf-8" ?>
+     <D:propertyupdate xmlns:D="DAV:" xmlns:A="{}">
+       <D:set>
+         <D:prop>
+             <A:{}>{}</A:{}>
+         </D:prop>
+       </D:set>
+     </D:propertyupdate>"#,
+            prop.nsn.xmlns, prop.nsn.name, prop.value, prop.nsn.name
+        );
+
+        let response = Box::pin(reqwest::Client::new())
+            .request(method.clone(), url.clone())
+            .header(CONTENT_TYPE, "application/xml")
+            .header(CONTENT_LENGTH, propertyupdate.len())
+            .basic_auth(self.resource.username(), Some(self.resource.password()))
+            .body(propertyupdate)
+            .send()
+            .await
+            .map_err(|source| KFError::HttpRequestError {
+                url,
+                method,
+                source,
+            })?;
+
+        if !response.status().is_success() {
+            return Err(KFError::UnexpectedHTTPStatusCode {
+                expected: HttpStatusConstraint::Success,
+                got: response.status(),
+            });
+        }
+
+        Ok(())
     }
 
     async fn add_item(&mut self, item: Item) -> KFResult<SyncStatus> {
@@ -388,6 +420,40 @@ impl DavCalendar for RemoteCalendar {
     }
 
     async fn delete_property(&mut self, nsn: &NamespacedName) -> KFResult<()> {
-        unimplemented!() //TODO
+        let method: Method = "PROPPATCH".parse().expect("invalid method name");
+        let url = self.url().clone();
+
+        let propertyupdate = format!(
+            r#"<?xml version="1.0" encoding="utf-8" ?>
+     <D:propertyupdate xmlns:D="DAV:" xmlns:A="{}">
+       <D:remove>
+         <D:prop><A:{}/></D:prop>
+       </D:remove>
+     </D:propertyupdate>"#,
+            nsn.xmlns, nsn.name
+        );
+
+        let response = Box::pin(reqwest::Client::new())
+            .request(method.clone(), url.clone())
+            .header(CONTENT_TYPE, "application/xml")
+            .header(CONTENT_LENGTH, propertyupdate.len())
+            .basic_auth(self.resource.username(), Some(self.resource.password()))
+            .body(propertyupdate)
+            .send()
+            .await
+            .map_err(|source| KFError::HttpRequestError {
+                url,
+                method,
+                source,
+            })?;
+
+        if !response.status().is_success() {
+            return Err(KFError::UnexpectedHTTPStatusCode {
+                expected: HttpStatusConstraint::Success,
+                got: response.status(),
+            });
+        }
+
+        Ok(())
     }
 }
