@@ -17,7 +17,9 @@ use crate::item::VersionTag;
 use crate::resource::Resource;
 use crate::traits::BaseCalendar;
 use crate::traits::DavCalendar;
-use crate::utils::{find_elem, NamespacedName, Property};
+use crate::utils::req::{propfind_body, sub_request_and_extract_elems};
+use crate::utils::xml::find_elem;
+use crate::utils::{NamespacedName, Property, PROP_ALLPROP};
 
 static TASKS_BODY: &str = r#"
     <c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
@@ -38,6 +40,7 @@ static MULTIGET_BODY_PREFIX: &str = r#"
             <c:calendar-data />
         </d:prop>
 "#;
+
 static MULTIGET_BODY_SUFFIX: &str = r#"
     </c:calendar-multiget>
 "#;
@@ -77,6 +80,35 @@ pub struct RemoteCalendar {
     cached_version_tags: Mutex<Option<HashMap<Url, VersionTag>>>,
 }
 
+impl RemoteCalendar {
+    async fn get_all_properties(&self) -> KFResult<Vec<Property>> {
+        let all_props = vec![PROP_ALLPROP.clone()];
+        self.get_properties(&all_props[..]).await
+    }
+
+    async fn get_properties(&self, props: &[NamespacedName]) -> KFResult<Vec<Property>> {
+        let body = propfind_body(props);
+        let propstats =
+            sub_request_and_extract_elems(&self.resource, "PROPFIND", body, 0, "propstat").await?;
+
+        let mut props = Vec::new();
+        for propstat in propstats {
+            if let Some(prop_el) = find_elem(&propstat, "prop") {
+                for child in prop_el.children() {
+                    props.push(Property::new(child.ns(), child.name(), child.text()));
+                }
+            } else {
+                return Err(KFError::MissingDOMElement {
+                    text: propstat.text(),
+                    el: "prop".to_string(),
+                });
+            }
+        }
+
+        Ok(props)
+    }
+}
+
 #[async_trait]
 impl BaseCalendar for RemoteCalendar {
     fn name(&self) -> &str {
@@ -96,7 +128,12 @@ impl BaseCalendar for RemoteCalendar {
         &self,
         names: &[NamespacedName],
     ) -> KFResult<Vec<Option<Property>>> {
-        unimplemented!() //TODO
+        self.get_properties(names).await.map(|props| {
+            names
+                .iter()
+                .map(|n| props.iter().find(|p| p.nsn == *n).cloned())
+                .collect()
+        })
     }
 
     async fn set_property(&mut self, prop: Property) -> KFResult<()> {
@@ -263,18 +300,19 @@ impl DavCalendar for RemoteCalendar {
             return Ok(map.clone());
         };
 
-        let responses = crate::client::sub_request_and_extract_elems(
+        let responses = sub_request_and_extract_elems(
             &self.resource,
             "REPORT",
             TASKS_BODY.to_string(),
+            1,
             "response",
         )
         .await?;
 
         let mut items = HashMap::new();
         for response in responses {
-            let item_url = crate::utils::find_elem(&response, "href")
-                .map(|elem| self.resource.combine(&elem.text()));
+            let item_url =
+                find_elem(&response, "href").map(|elem| self.resource.combine(&elem.text()));
             let item_url = match item_url {
                 None => {
                     log::warn!("Unable to extract HREF");
@@ -283,7 +321,7 @@ impl DavCalendar for RemoteCalendar {
                 Some(resource) => resource.url().clone(),
             };
 
-            let version_tag = match crate::utils::find_elem(&response, "getetag") {
+            let version_tag = match find_elem(&response, "getetag") {
                 None => {
                     log::warn!("Unable to extract ETAG for item {}, ignoring it", item_url);
                     continue;
@@ -348,13 +386,8 @@ impl DavCalendar for RemoteCalendar {
         let body = format!("{}{}{}", MULTIGET_BODY_PREFIX, hrefs, MULTIGET_BODY_SUFFIX);
 
         // Send the request
-        let xml_replies = crate::client::sub_request_and_extract_elems(
-            &self.resource,
-            "REPORT",
-            body,
-            "response",
-        )
-        .await?;
+        let xml_replies =
+            sub_request_and_extract_elems(&self.resource, "REPORT", body, 1, "response").await?;
 
         // This is supposed to be cached
         let version_tags = self.get_item_version_tags().await?;
@@ -412,11 +445,16 @@ impl DavCalendar for RemoteCalendar {
     }
 
     async fn get_properties(&self) -> KFResult<Vec<Property>> {
-        unimplemented!() //TODO
+        self.get_all_properties().await
     }
 
     async fn get_property(&self, nsn: &NamespacedName) -> KFResult<Option<Property>> {
-        unimplemented!() //TODO
+        let props = vec![nsn.clone()];
+        self.get_properties(&props[..]).await.map(|props| {
+            debug_assert_eq!(props.len(), 1);
+
+            props.get(0).cloned()
+        })
     }
 
     async fn delete_property(&mut self, nsn: &NamespacedName) -> KFResult<()> {

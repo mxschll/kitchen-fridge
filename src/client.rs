@@ -6,7 +6,6 @@ use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use csscolorparser::Color;
-use minidom::Element;
 use reqwest::header::CONTENT_TYPE;
 use reqwest::{Method, StatusCode};
 use url::Url;
@@ -19,7 +18,14 @@ use crate::resource::Resource;
 use crate::traits::BaseCalendar;
 use crate::traits::CalDavSource;
 use crate::traits::DavCalendar;
-use crate::utils::{find_elem, find_elems, Namespaces, Property};
+use crate::utils::req::{
+    propfind_body, sub_request_and_extract_elem, sub_request_and_extract_elems,
+};
+use crate::utils::xml::find_elem;
+use crate::utils::{
+    Namespaces, Property, PROP_CALENDAR_COLOR, PROP_DISPLAY_NAME, PROP_RESOURCE_TYPE,
+    PROP_SUPPORTED_CALENDAR_COMPONENT_SET,
+};
 
 static DAVCLIENT_BODY: &str = r#"
     <d:propfind xmlns:d="DAV:">
@@ -37,100 +43,6 @@ static HOMESET_BODY: &str = r#"
       </d:prop>
     </d:propfind>
 "#;
-
-static CAL_BODY: &str = r#"
-    <d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav" >
-       <d:prop>
-         <d:displayname />
-         <E:calendar-color xmlns:E="http://apple.com/ns/ical/"/>
-         <d:resourcetype />
-         <c:supported-calendar-component-set />
-       </d:prop>
-    </d:propfind>
-"#;
-
-pub(crate) async fn sub_request(
-    resource: &Resource,
-    method: &str,
-    body: String,
-    depth: u32,
-) -> KFResult<String> {
-    let method: Method = method.parse().expect("invalid method name");
-
-    let url = resource.url();
-
-    let res = reqwest::Client::new()
-        .request(method.clone(), url.clone())
-        .header("Depth", depth)
-        .header(CONTENT_TYPE, "application/xml")
-        .basic_auth(resource.username(), Some(resource.password()))
-        .body(body)
-        .send()
-        .await
-        .map_err(|source| KFError::HttpRequestError {
-            url: url.clone(),
-            method: method.clone(),
-            source,
-        })?;
-
-    if !res.status().is_success() {
-        return Err(KFError::UnexpectedHTTPStatusCode {
-            expected: HttpStatusConstraint::Success,
-            got: res.status(),
-        });
-    }
-
-    let text = res
-        .text()
-        .await
-        .map_err(|source| KFError::HttpRequestError {
-            url: url.clone(),
-            method,
-            source,
-        })?;
-    Ok(text)
-}
-
-pub(crate) async fn sub_request_and_extract_elem(
-    resource: &Resource,
-    body: String,
-    items: &[&str],
-) -> KFResult<String> {
-    let text = sub_request(resource, "PROPFIND", body, 0).await?;
-
-    let mut current_element: &Element = &text
-        .parse()
-        .map_err(|source| KFError::DOMParseError { text, source })?;
-    for item in items {
-        current_element = match find_elem(current_element, item) {
-            Some(elem) => elem,
-            None => {
-                return Err(KFError::MissingDOMElement {
-                    text: current_element.text(),
-                    el: item.to_string(),
-                })
-            }
-        }
-    }
-    Ok(current_element.text())
-}
-
-pub(crate) async fn sub_request_and_extract_elems(
-    resource: &Resource,
-    method: &str,
-    body: String,
-    item: &str,
-) -> KFResult<Vec<Element>> {
-    let text = sub_request(resource, method, body, 1).await?;
-
-    let element: &Element = &text
-        .parse()
-        .map_err(|source| KFError::DOMParseError { text, source })?;
-    Ok(find_elems(element, item)
-        .iter()
-        .map(|elem| (*elem).clone())
-        .collect())
-}
 
 /// A CalDAV data source that fetches its data from a CalDAV server
 #[derive(Debug)]
@@ -173,6 +85,7 @@ impl Client {
         let href = sub_request_and_extract_elem(
             &self.resource,
             DAVCLIENT_BODY.into(),
+            0,
             &["current-user-principal", "href"],
         )
         .await?;
@@ -193,6 +106,7 @@ impl Client {
         let href = sub_request_and_extract_elem(
             &principal_url,
             HOMESET_BODY.into(),
+            0,
             &["calendar-home-set", "href"],
         )
         .await?;
@@ -207,14 +121,16 @@ impl Client {
     /// represent them.
     async fn populate_calendars(&self) -> KFResult<()> {
         let cal_home_set = self.get_cal_home_set().await?;
+        let props = vec![
+            PROP_CALENDAR_COLOR.clone(),
+            PROP_DISPLAY_NAME.clone(),
+            PROP_RESOURCE_TYPE.clone(),
+            PROP_SUPPORTED_CALENDAR_COMPONENT_SET.clone(),
+        ];
+        let body = propfind_body(&props[..]);
 
-        let responses = sub_request_and_extract_elems(
-            &cal_home_set,
-            "PROPFIND",
-            CAL_BODY.to_string(),
-            "response",
-        )
-        .await?;
+        let responses =
+            sub_request_and_extract_elems(&cal_home_set, "PROPFIND", body, 1, "response").await?;
         let mut calendars = HashMap::new();
         for response in responses {
             let display_name = find_elem(&response, "displayname")
