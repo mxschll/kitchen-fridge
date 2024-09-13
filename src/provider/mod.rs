@@ -2,7 +2,7 @@
 //!
 //! It is also responsible for syncing them together
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fmt::{Display, Formatter};
 use std::marker::PhantomData;
 use std::sync::{Arc, Mutex};
@@ -11,10 +11,11 @@ use itertools::Itertools;
 use url::Url;
 
 use crate::error::KFResult;
-use crate::item::{SyncStatus, VersionTag};
 use crate::traits::CompleteCalendar;
 use crate::traits::{BaseCalendar, CalDavSource, DavCalendar};
-use crate::utils::{NamespacedName, Property};
+use crate::utils::prop::Property;
+use crate::utils::sync::{SyncStatus, Syncable, VersionTag};
+use crate::utils::NamespacedName;
 
 pub mod sync_progress;
 use sync_progress::SyncProgress;
@@ -55,7 +56,7 @@ struct ItemChanges {
 struct PropChanges {
     local_prop_dels: HashSet<NamespacedName>,
     remote_prop_dels: HashSet<NamespacedName>,
-    local_prop_changes: HashSet<Property>,
+    local_prop_changes: HashSet<NamespacedName>,
     remote_prop_changes: HashSet<Property>,
     local_prop_additions: HashSet<Property>,
     remote_prop_additions: HashSet<Property>,
@@ -438,7 +439,7 @@ where
     ) -> KFResult<PropChanges> {
         let mut local_prop_dels: HashSet<NamespacedName> = HashSet::new();
         let mut remote_prop_dels: HashSet<NamespacedName> = HashSet::new();
-        let mut local_prop_changes: HashSet<Property> = HashSet::new();
+        let mut local_prop_changes: HashSet<NamespacedName> = HashSet::new();
         let mut remote_prop_changes: HashSet<Property> = HashSet::new();
         let mut local_prop_additions: HashSet<Property> = HashSet::new();
         let mut remote_prop_additions: HashSet<Property> = HashSet::new();
@@ -451,8 +452,12 @@ where
             details: format!("{} remote properties", remote_props.len()),
         });
 
-        let mut local_props_to_handle: HashSet<Property> =
-            cal_local.get_properties().await.values().cloned().collect();
+        let mut local_props_to_handle: HashMap<NamespacedName, Property> = cal_local
+            .get_properties()
+            .await
+            .values()
+            .map(|p| (p.nsn().clone(), p.clone()))
+            .collect();
 
         for remote_prop in remote_props {
             progress.trace(&format!("***** Considering remote prop {}...", remote_prop));
@@ -463,7 +468,8 @@ where
                     remote_prop_additions.insert(remote_prop);
                 }
                 Some(local_prop) => {
-                    if !local_props_to_handle.remove(&remote_prop) {
+                    debug_assert_eq!(remote_prop.nsn(), local_prop.nsn());
+                    if local_props_to_handle.remove(remote_prop.nsn()).is_none() {
                         progress.error(&format!(
                             "Inconsistent state: missing prop {} from the local props",
                             remote_prop
@@ -472,23 +478,23 @@ where
 
                     let prop_name: NamespacedName = local_prop.clone().into();
 
-                    match &local_prop.sync_status {
+                    match local_prop.sync_status() {
                         SyncStatus::NotSynced => {
                             progress.error(&format!("Property reuse between remote and local sources ({}). Ignoring this item in the sync", prop_name));
                             continue;
                         }
                         SyncStatus::Synced(local_tag) => {
-                            if remote_prop.value.as_str() != local_tag.as_str() {
+                            if remote_prop.value().as_str() != local_tag.as_str() {
                                 // This has been modified on the remote
                                 progress.debug(&format!("*   {} is a remote change", remote_prop));
                                 remote_prop_changes.insert(remote_prop);
                             }
                         }
                         SyncStatus::LocallyModified(local_tag) => {
-                            if remote_prop.value.as_str() == local_tag.as_str() {
+                            if remote_prop.value().as_str() == local_tag.as_str() {
                                 // This has been changed locally
                                 progress.debug(&format!("*   {} is a local change", remote_prop));
-                                local_prop_changes.insert(remote_prop);
+                                local_prop_changes.insert(remote_prop.nsn().clone());
                             } else {
                                 progress.info(&format!("Conflict: prop {} has been modified in both sources. Using the remote version.", prop_name));
                                 progress.debug(&format!(
@@ -499,7 +505,7 @@ where
                             }
                         }
                         SyncStatus::LocallyDeleted(local_tag) => {
-                            if remote_prop.value.as_str() == local_tag.as_str() {
+                            if remote_prop.value().as_str() == local_tag.as_str() {
                                 // This has been locally deleted
                                 progress.debug(&format!("*   {} is a local deletion", remote_prop));
                                 local_prop_dels.insert(prop_name);
@@ -518,10 +524,10 @@ where
         }
 
         // Also iterate on the local props that are not on the remote
-        for local_prop in local_props_to_handle {
+        for (prop_name, local_prop) in local_props_to_handle {
+            debug_assert_eq!(&prop_name, local_prop.nsn());
             progress.trace(&format!("##### Considering local prop {}...", local_prop));
-            let prop_name: NamespacedName = local_prop.clone().into();
-            match local_prop.sync_status {
+            match local_prop.sync_status() {
                 SyncStatus::Synced(_) => {
                     // This item has been removed from the remote
                     progress.debug(&format!("#   {} is a deletion from the server", local_prop));
@@ -717,6 +723,14 @@ where
         } = prop_changes;
         progress.trace("Committing changes to props...");
 
+        log::debug!("committing prop changes");
+        log::debug!("local_prop_dels: {:?}", local_prop_dels);
+        log::debug!("remote_prop_dels: {:?}", remote_prop_dels);
+        log::debug!("local_prop_changes: {:?}", local_prop_changes);
+        log::debug!("remote_prop_changes: {:?}", remote_prop_changes);
+        log::debug!("local_prop_additions: {:?}", local_prop_additions);
+        log::debug!("remote_prop_additions: {:?}", remote_prop_additions);
+
         for prop_del in local_prop_dels {
             progress.debug(&format!(
                 "> Pushing local prop deletion {} to the server",
@@ -799,16 +813,15 @@ where
                     progress.error(&format!("Inconsistency: created prop {} has been marked for upload but is locally missing", prop_add));
                     continue;
                 }
-                Some(prop) => {
-                    match cal_remote.set_property(prop.clone()).await {
+                Some(local_prop) => {
+                    match cal_remote.set_property(local_prop.clone()).await {
                         Err(err) => progress.error(&format!(
                             "Unable to add prop {} to remote calendar: {}",
                             prop_add, err
                         )),
                         Ok(_) => {
                             // Update local sync status
-                            prop.sync_status =
-                                SyncStatus::Synced(VersionTag::from(prop.value.clone()));
+                            local_prop.mark_synced();
                         }
                     }
                 }
@@ -826,21 +839,21 @@ where
                 props_done_already: progress.counter(),
                 details: format!("{}", prop_change),
             });
-            match cal_local.get_property_by_name_mut(prop_change.nsn()).await {
+            match cal_local.get_property_by_name_mut(&prop_change).await {
                 None => {
                     progress.error(&format!("Inconsistency: modified prop {} has been marked for upload but is locally missing", prop_change));
                     continue;
                 }
-                Some(prop) => {
-                    match cal_remote.set_property(prop.clone()).await {
+                Some(local_prop) => {
+                    match cal_remote.set_property(local_prop.clone()).await {
                         Err(err) => progress.error(&format!(
                             "Unable to update prop {} in remote calendar: {}",
                             prop_change, err
                         )),
                         Ok(_) => {
                             // Update local sync status
-                            prop.sync_status =
-                                SyncStatus::Synced(VersionTag::from(prop.value.clone()));
+                            log::debug!("Marking local prop as synced: {}", local_prop);
+                            local_prop.mark_synced();
                         }
                     };
                 }

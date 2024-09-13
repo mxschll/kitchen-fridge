@@ -10,10 +10,10 @@ use url::Url;
 use crate::calendar::SupportedComponents;
 use crate::error::KFResult;
 use crate::item::Item;
-use crate::item::SyncStatus;
-use crate::item::VersionTag;
 use crate::resource::Resource;
-use crate::utils::{NamespacedName, Property};
+use crate::utils::prop::Property;
+use crate::utils::sync::{SyncStatus, VersionTag};
+use crate::utils::NamespacedName;
 
 /// This trait must be implemented by data sources (either local caches or remote CalDAV clients)
 ///

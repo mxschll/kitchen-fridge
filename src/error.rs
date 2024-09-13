@@ -7,7 +7,7 @@ use crate::{
     calendar::remote_calendar::RemoteCalendarError,
     ical::IcalParseError,
     item::ItemType,
-    utils::{NamespacedName, Property},
+    utils::{prop::Property, NamespacedName},
 };
 
 #[derive(Clone, Debug)]

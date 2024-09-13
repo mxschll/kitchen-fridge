@@ -12,14 +12,14 @@ use url::Url;
 use crate::calendar::SupportedComponents;
 use crate::error::{HttpStatusConstraint, KFError, KFResult};
 use crate::item::Item;
-use crate::item::SyncStatus;
-use crate::item::VersionTag;
 use crate::resource::Resource;
 use crate::traits::BaseCalendar;
 use crate::traits::DavCalendar;
+use crate::utils::prop::{Property, PROP_ALLPROP};
 use crate::utils::req::{propfind_body, sub_request_and_extract_elems};
+use crate::utils::sync::{SyncStatus, VersionTag};
 use crate::utils::xml::find_elem;
-use crate::utils::{NamespacedName, Property, PROP_ALLPROP};
+use crate::utils::NamespacedName;
 
 static TASKS_BODY: &str = r#"
     <c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
@@ -131,7 +131,7 @@ impl BaseCalendar for RemoteCalendar {
         self.get_properties(names).await.map(|props| {
             names
                 .iter()
-                .map(|n| props.iter().find(|p| p.nsn == *n).cloned())
+                .map(|n| props.iter().find(|p| p.nsn() == n).cloned())
                 .collect()
         })
     }
@@ -149,7 +149,10 @@ impl BaseCalendar for RemoteCalendar {
          </D:prop>
        </D:set>
      </D:propertyupdate>"#,
-            prop.nsn.xmlns, prop.nsn.name, prop.value, prop.nsn.name
+            prop.xmlns(),
+            prop.name(),
+            prop.value(),
+            prop.name()
         );
 
         let response = Box::pin(reqwest::Client::new())

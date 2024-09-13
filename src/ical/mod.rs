@@ -22,7 +22,7 @@ pub fn default_prod_id() -> String {
 mod tests {
     use super::*;
 
-    use crate::item::SyncStatus;
+    use crate::utils::sync::SyncStatus;
     use std::collections::HashSet;
 
     #[test]

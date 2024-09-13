@@ -18,14 +18,15 @@ use crate::resource::Resource;
 use crate::traits::BaseCalendar;
 use crate::traits::CalDavSource;
 use crate::traits::DavCalendar;
+use crate::utils::prop::{
+    Property, PROP_CALENDAR_COLOR, PROP_DISPLAY_NAME, PROP_RESOURCE_TYPE,
+    PROP_SUPPORTED_CALENDAR_COMPONENT_SET,
+};
 use crate::utils::req::{
     propfind_body, sub_request_and_extract_elem, sub_request_and_extract_elems,
 };
 use crate::utils::xml::find_elem;
-use crate::utils::{
-    Namespaces, Property, PROP_CALENDAR_COLOR, PROP_DISPLAY_NAME, PROP_RESOURCE_TYPE,
-    PROP_SUPPORTED_CALENDAR_COMPONENT_SET,
-};
+use crate::utils::Namespaces;
 
 static DAVCLIENT_BODY: &str = r#"
     <d:propfind xmlns:d="DAV:">
@@ -383,7 +384,7 @@ fn calendar_body(
             s.push('<');
             s.push_str(symbolized.as_str());
             s.push('>');
-            s.push_str(p.value.as_str());
+            s.push_str(p.value().as_str());
             s.push('<');
             s.push('/');
             s.push_str(symbolized.as_str());

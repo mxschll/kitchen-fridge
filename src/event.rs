@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use url::Url;
 
-use crate::item::SyncStatus;
+use crate::utils::sync::SyncStatus;
 
 /// TODO: implement `Event` one day.
 /// This crate currently only supports tasks, not calendar events.

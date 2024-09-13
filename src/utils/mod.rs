@@ -6,15 +6,18 @@ use std::hash::Hash;
 use std::io::{stdin, stdout, Read, Write};
 use std::sync::{Arc, Mutex};
 
+use prop::{print_property, Property};
 use serde::{Deserialize, Serialize};
+use sync::Syncable;
 use url::Url;
 
-use crate::item::SyncStatus;
 use crate::traits::CompleteCalendar;
 use crate::traits::DavCalendar;
 use crate::Item;
 
+pub mod prop;
 pub(crate) mod req;
+pub mod sync;
 pub(crate) mod xml;
 
 /// A debug utility that pretty-prints calendars
@@ -22,7 +25,13 @@ pub async fn print_calendar_list<C>(cals: &HashMap<Url, Arc<Mutex<C>>>)
 where
     C: CompleteCalendar,
 {
-    for (url, cal) in cals {
+    let ordered = {
+        let mut v: Vec<(&Url, &Arc<Mutex<C>>)> = cals.iter().collect();
+        v.sort_by_key(|x| x.0);
+        v
+    };
+
+    for (url, cal) in ordered {
         println!("CAL {} ({})", cal.lock().unwrap().name(), url);
         match cal.lock().unwrap().get_items().await {
             Err(_err) => continue,
@@ -31,6 +40,10 @@ where
                     print_task(item);
                 }
             }
+        }
+
+        for prop in cal.lock().unwrap().get_properties().await.values() {
+            print_property(prop);
         }
     }
 }
@@ -56,12 +69,7 @@ where
 pub fn print_task(item: &Item) {
     if let Item::Task(task) = item {
         let completion = if task.completed() { "✓" } else { " " };
-        let sync = match task.sync_status() {
-            SyncStatus::NotSynced => ".",
-            SyncStatus::Synced(_) => "=",
-            SyncStatus::LocallyModified(_) => "~",
-            SyncStatus::LocallyDeleted(_) => "x",
-        };
+        let sync = task.sync_status().symbol();
         println!("    {}{} {}\t{}", completion, sync, task.name(), task.url());
     }
 }
@@ -106,6 +114,14 @@ pub fn random_url(parent_calendar: &Url) -> Url {
     parent_calendar.join(&random).unwrap(/* this cannot panic since we've just created a string that is a valid URL */)
 }
 
+/// Generate a random NamespacedName, under a namespace we control
+pub fn random_nsn() -> NamespacedName {
+    NamespacedName {
+        xmlns: "https://github.com/daladim/kitchen-fridge/__test_xmlns__/".to_string(),
+        name: uuid::Uuid::new_v4().to_hyphenated().to_string(),
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, Hash, PartialEq)]
 pub struct NamespacedName {
     pub xmlns: String,
@@ -131,6 +147,25 @@ impl fmt::Display for NamespacedName {
         f.write_str(self.xmlns.as_str())?;
         fmt::Write::write_char(f, ':')?;
         f.write_str(self.name.as_str())
+    }
+}
+impl From<Property> for NamespacedName {
+    fn from(value: Property) -> Self {
+        value.nsn().clone()
+    }
+}
+impl PartialOrd for NamespacedName {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(Ord::cmp(self, other))
+    }
+}
+
+impl Ord for NamespacedName {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        match self.xmlns.cmp(&other.xmlns) {
+            std::cmp::Ordering::Equal => self.name.cmp(&other.name),
+            c => c,
+        }
     }
 }
 
@@ -181,79 +216,7 @@ impl Namespaces {
         s
     }
 
-    pub(crate) fn prefixes(&self) -> std::collections::hash_map::Values<String, char> {
-        self.mapping.values()
-    }
-
     pub(crate) fn sym(&self, ns: &String) -> Option<char> {
         self.mapping.get(ns).cloned()
-    }
-}
-
-lazy_static::lazy_static! {
-    // WebDAV properties
-    pub(crate) static ref PROP_DISPLAY_NAME: NamespacedName = NamespacedName::new("DAV:", "displayname");
-    pub(crate) static ref PROP_RESOURCE_TYPE: NamespacedName = NamespacedName::new("DAV:", "resourcetype");
-    pub(crate) static ref PROP_ALLPROP: NamespacedName = NamespacedName::new("DAV:", "allprop");
-
-    // CalDAV properties
-    pub(crate) static ref PROP_SUPPORTED_CALENDAR_COMPONENT_SET: NamespacedName = NamespacedName::new("urn:ietf:params:xml:ns:caldav", "supported-calendar-component-set");
-
-    // iCal properties
-    pub(crate) static ref PROP_CALENDAR_COLOR: NamespacedName = NamespacedName::new("http://apple.com/ns/ical/", "calendar-color");
-}
-/// A WebDAV property.
-///
-/// Similar to ical Property but allowing arbitrary namespaces and tracking of sync status
-/// This should allow for user-defined properties
-#[derive(Clone, Debug, Serialize, Deserialize, Eq, Hash, PartialEq)]
-pub struct Property {
-    pub nsn: NamespacedName,
-    pub value: String,
-    pub sync_status: SyncStatus,
-}
-
-impl Property {
-    pub fn new<S1: ToString, S2: ToString>(xmlns: S1, name: S2, value: String) -> Self {
-        Self {
-            nsn: NamespacedName {
-                xmlns: xmlns.to_string(),
-                name: name.to_string(),
-            },
-            value,
-            sync_status: SyncStatus::NotSynced,
-        }
-    }
-
-    pub fn nsn(&self) -> &NamespacedName {
-        &self.nsn
-    }
-
-    pub fn xmlns(&self) -> &str {
-        self.nsn.xmlns.as_str()
-    }
-
-    pub fn name(&self) -> &str {
-        self.nsn.name.as_str()
-    }
-}
-
-impl fmt::Display for Property {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.xmlns())?;
-
-        fmt::Write::write_char(f, ':')?;
-
-        f.write_str(self.name())?;
-
-        fmt::Write::write_char(f, '=')?;
-
-        f.write_str(self.value.as_str())
-    }
-}
-
-impl Into<NamespacedName> for Property {
-    fn into(self) -> NamespacedName {
-        self.nsn
     }
 }

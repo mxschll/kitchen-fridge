@@ -5,8 +5,8 @@ use ical::parser::ical::component::{IcalCalendar, IcalEvent, IcalTodo};
 use ical::parser::ParserError;
 use url::Url;
 
-use crate::item::SyncStatus;
 use crate::task::{CompletionStatus, Relationship};
+use crate::utils::sync::SyncStatus;
 use crate::Event;
 use crate::Item;
 use crate::Task;
@@ -329,7 +329,7 @@ END:VCALENDAR
 "#;
 
     use super::*;
-    use crate::item::VersionTag;
+    use crate::utils::sync::{Syncable, VersionTag};
 
     #[test]
     fn test_ical_parsing() {

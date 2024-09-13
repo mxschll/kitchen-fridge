@@ -8,8 +8,10 @@ use serde::{Deserialize, Serialize};
 use url::Url;
 use uuid::Uuid;
 
-use crate::item::SyncStatus;
-use crate::utils::random_url;
+use crate::utils::{
+    random_url,
+    sync::{SyncStatus, Syncable},
+};
 
 /// RFC5545 defines the completion as several optional fields, yet some combinations make no sense.
 /// This enum provides an API that forbids such impossible combinations.
@@ -171,9 +173,6 @@ impl Task {
     pub fn ical_prod_id(&self) -> &str {
         &self.ical_prod_id
     }
-    pub fn sync_status(&self) -> &SyncStatus {
-        &self.sync_status
-    }
     pub fn last_modified(&self) -> &DateTime<Utc> {
         &self.last_modified
     }
@@ -224,22 +223,6 @@ impl Task {
         // last modified dates are ignored (they are not totally mocked in integration tests)
     }
 
-    pub fn set_sync_status(&mut self, new_status: SyncStatus) {
-        self.sync_status = new_status;
-    }
-
-    fn update_sync_status(&mut self) {
-        match &self.sync_status {
-            SyncStatus::NotSynced | SyncStatus::LocallyModified(_) => { /* do nothing */ }
-            SyncStatus::Synced(prev_vt) => {
-                self.sync_status = SyncStatus::LocallyModified(prev_vt.clone());
-            }
-            SyncStatus::LocallyDeleted(_) => {
-                log::warn!("Trying to update an item that has previously been deleted. These changes will probably be ignored at next sync.");
-            }
-        }
-    }
-
     fn update_last_modified(&mut self) {
         self.last_modified = Utc::now();
     }
@@ -247,7 +230,7 @@ impl Task {
     /// Rename a task.
     /// This updates its "last modified" field
     pub fn set_name(&mut self, new_name: String) {
-        self.update_sync_status();
+        self.mark_modified_since_last_sync();
         self.update_last_modified();
         self.name = new_name;
     }
@@ -261,7 +244,7 @@ impl Task {
 
     /// Set the completion status
     pub fn set_completion_status(&mut self, new_completion_status: CompletionStatus) {
-        self.update_sync_status();
+        self.mark_modified_since_last_sync();
         self.update_last_modified();
         self.completion_status = new_completion_status;
     }
@@ -273,5 +256,19 @@ impl Task {
     ) {
         self.sync_status = SyncStatus::random_synced();
         self.completion_status = new_completion_status;
+    }
+}
+
+impl Syncable for Task {
+    fn value(&self) -> &String {
+        &self.name
+    }
+
+    fn sync_status(&self) -> &SyncStatus {
+        &self.sync_status
+    }
+
+    fn set_sync_status(&mut self, new_status: SyncStatus) {
+        self.sync_status = new_status;
     }
 }

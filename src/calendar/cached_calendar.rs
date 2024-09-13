@@ -8,16 +8,29 @@ use url::Url;
 use crate::calendar::SupportedComponents;
 use crate::error::KFError;
 use crate::error::KFResult;
-use crate::item::SyncStatus;
 use crate::traits::{BaseCalendar, CompleteCalendar};
+use crate::utils::prop::Property;
+use crate::utils::sync::SyncStatus;
+use crate::utils::sync::VersionTag;
 use crate::utils::NamespacedName;
-use crate::utils::Property;
 use crate::Item;
 
 #[cfg(feature = "local_calendar_mocks_remote_calendars")]
 use crate::mock_behaviour::MockBehaviour;
 #[cfg(feature = "local_calendar_mocks_remote_calendars")]
 use std::sync::{Arc, Mutex};
+
+fn print_props(props: &HashMap<NamespacedName, Property>) {
+    let ordered = {
+        let mut p: Vec<(&NamespacedName, &Property)> = props.iter().collect();
+        p.sort_by(|a, b| a.0.cmp(b.0));
+        p
+    };
+
+    for (nsn, prop) in ordered {
+        log::debug!("{}: {}", nsn, prop.value());
+    }
+}
 
 /// A calendar used by the [`cache`](crate::cache) module
 ///
@@ -122,6 +135,28 @@ impl CachedCalendar {
                 log::debug!("Different items for URL {}:", url_l);
                 log::debug!("{:#?}", item_l);
                 log::debug!("{:#?}", item_r);
+                return Ok(false);
+            }
+        }
+
+        let props_l = <Self as CompleteCalendar>::get_properties(self).await;
+        let props_r = <Self as CompleteCalendar>::get_properties(other).await;
+
+        if !crate::utils::keys_are_the_same(props_l, props_r) {
+            log::debug!("Different keys for props");
+            print_props(props_l);
+            print_props(props_r);
+            return Ok(false);
+        }
+
+        for (nsn_l, prop_l) in props_l {
+            let prop_r = props_r
+                .get(nsn_l)
+                .expect("should not happen, we've just tested keys are the same");
+            if prop_l != prop_r {
+                log::debug!("Different props for nsn {}:", nsn_l);
+                log::debug!("local prop: {:#?}", prop_l);
+                log::debug!("remote prop: {:#?}", prop_r);
                 return Ok(false);
             }
         }
@@ -361,7 +396,7 @@ impl CompleteCalendar for CachedCalendar {
             *p = prop;
             Ok(())
         } else {
-            Err(KFError::PropertyDoesNotExist(prop.nsn))
+            Err(KFError::PropertyDoesNotExist(prop.nsn().clone()))
         }
     }
 
@@ -386,7 +421,7 @@ impl CompleteCalendar for CachedCalendar {
             .properties
             .get_mut(nsn)
             .ok_or(KFError::PropertyDoesNotExist(nsn.clone()))?;
-        prop.sync_status = SyncStatus::LocallyDeleted(prop.value.clone().into());
+        prop.mark_for_deletion();
         Ok(())
     }
 
@@ -402,7 +437,7 @@ impl CompleteCalendar for CachedCalendar {
 // This class can be used to mock a remote calendar for integration tests
 
 #[cfg(feature = "local_calendar_mocks_remote_calendars")]
-use crate::{item::VersionTag, resource::Resource, traits::DavCalendar};
+use crate::{resource::Resource, traits::DavCalendar};
 
 #[cfg(feature = "local_calendar_mocks_remote_calendars")]
 #[async_trait]
@@ -426,8 +461,6 @@ impl DavCalendar for CachedCalendar {
         self.mock_behaviour
             .as_ref()
             .map_or(Ok(()), |b| b.lock().unwrap().can_get_item_version_tags())?;
-
-        use crate::item::SyncStatus;
 
         let mut result = HashMap::new();
 
