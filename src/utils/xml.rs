@@ -1,5 +1,3 @@
-use std::io::Write;
-
 use minidom::Element;
 
 /// Walks an XML tree and returns every element that has the given name
@@ -36,12 +34,4 @@ pub fn find_elem<S: AsRef<str>>(root: &Element, searched_name: S) -> Option<&Ele
         }
     }
     None
-}
-
-pub fn print_xml(element: &Element) {
-    let mut writer = std::io::stdout();
-
-    let mut xml_writer = minidom::quick_xml::Writer::new_with_indent(std::io::stdout(), 0x20, 4);
-    let _ = element.to_writer(&mut xml_writer);
-    let _ = writer.write(&[0x0a]);
 }
