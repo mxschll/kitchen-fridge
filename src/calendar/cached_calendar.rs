@@ -139,24 +139,24 @@ impl CachedCalendar {
             }
         }
 
-        let props_l = <Self as CompleteCalendar>::get_properties(self).await;
-        let props_r = <Self as CompleteCalendar>::get_properties(other).await;
+        let props_a = <Self as CompleteCalendar>::get_properties(self).await;
+        let props_b = <Self as CompleteCalendar>::get_properties(other).await;
 
-        if !crate::utils::keys_are_the_same(props_l, props_r) {
+        if !crate::utils::keys_are_the_same(props_a, props_b) {
             log::debug!("Different keys for props");
-            print_props(props_l);
-            print_props(props_r);
+            print_props(props_a);
+            print_props(props_b);
             return Ok(false);
         }
 
-        for (nsn_l, prop_l) in props_l {
-            let prop_r = props_r
-                .get(nsn_l)
+        for (nsn, prop_a) in props_a {
+            let prop_b = props_b
+                .get(nsn)
                 .expect("should not happen, we've just tested keys are the same");
-            if prop_l != prop_r {
-                log::debug!("Different props for nsn {}:", nsn_l);
-                log::debug!("local prop: {:#?}", prop_l);
-                log::debug!("remote prop: {:#?}", prop_r);
+            if prop_a != prop_b {
+                log::debug!("Different props for nsn {}:", nsn);
+                log::debug!("{:#?}", prop_a);
+                log::debug!("{:#?}", prop_b);
                 return Ok(false);
             }
         }
@@ -301,10 +301,13 @@ impl BaseCalendar for CachedCalendar {
     async fn set_property(&mut self, prop: Property) -> KFResult<()> {
         if let Some(p) = self.properties.get_mut(prop.nsn()) {
             //NOTE Should be okay since the key remains the same, thus the hash remains the same
-            *p = prop;
+            *p = prop.clone();
         } else {
-            self.properties.insert(prop.nsn().clone(), prop);
+            self.properties.insert(prop.nsn().clone(), prop.clone());
         }
+
+        debug_assert_eq!(self.properties.get(prop.nsn()), Some(&prop));
+
         Ok(())
     }
 

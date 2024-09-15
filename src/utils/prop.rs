@@ -100,11 +100,15 @@ impl fmt::Display for Property {
 
         fmt::Write::write_char(f, '=')?;
 
-        f.write_str(self.value.as_str())
+        f.write_str(self.value.as_str())?;
+
+        f.write_str("; ")?;
+
+        write!(f, "{}", self.sync_status)
     }
 }
 
 pub fn print_property(prop: &Property) {
     let sync = prop.sync_status.symbol();
-    println!("     {} prop {} {:?}", sync, prop, prop.sync_status());
+    println!("     {} prop {}", sync, prop);
 }

@@ -1022,26 +1022,49 @@ async fn populate_test_provider(
         match required_state {
             LocatedState::None => panic!("Should not happen, we've continued already"),
             LocatedState::Local(s) => {
+                log::debug!("Setting local to {:?}", new_prop);
                 get_or_insert_calendar(&mut local, &s.calendar)
                     .await
                     .unwrap()
                     .lock()
                     .unwrap()
-                    .set_property(new_prop)
+                    .set_property(new_prop.clone())
                     .await
                     .unwrap();
+                debug_assert_eq!(
+                    get_or_insert_calendar(&mut local, &s.calendar)
+                        .await
+                        .unwrap()
+                        .lock()
+                        .unwrap()
+                        .get_property_by_name(new_prop.nsn())
+                        .await,
+                    Some(&new_prop)
+                );
             }
             LocatedState::Remote(s) => {
+                log::debug!("Setting remote to {:?}", new_prop);
                 get_or_insert_calendar(&mut remote, &s.calendar)
                     .await
                     .unwrap()
                     .lock()
                     .unwrap()
-                    .set_property(new_prop)
+                    .set_property(new_prop.clone())
                     .await
                     .unwrap();
+                debug_assert_eq!(
+                    get_or_insert_calendar(&mut remote, &s.calendar)
+                        .await
+                        .unwrap()
+                        .lock()
+                        .unwrap()
+                        .get_property_by_name(new_prop.nsn())
+                        .await,
+                    Some(&new_prop)
+                );
             }
             LocatedState::BothSynced(s) => {
+                log::debug!("Setting local and remote to {:?}", new_prop);
                 get_or_insert_calendar(&mut local, &s.calendar)
                     .await
                     .unwrap()
@@ -1059,23 +1082,26 @@ async fn populate_test_provider(
                     .await
                     .unwrap();
 
-                assert!(get_or_insert_calendar(&mut local, &s.calendar)
-                    .await
-                    .unwrap()
-                    .lock()
-                    .unwrap()
-                    .get_property_by_name(new_prop.nsn())
-                    .await
-                    .is_some());
-
-                assert!(get_or_insert_calendar(&mut remote, &s.calendar)
-                    .await
-                    .unwrap()
-                    .lock()
-                    .unwrap()
-                    .get_property_by_name(new_prop.nsn())
-                    .await
-                    .is_some());
+                debug_assert_eq!(
+                    get_or_insert_calendar(&mut local, &s.calendar)
+                        .await
+                        .unwrap()
+                        .lock()
+                        .unwrap()
+                        .get_property_by_name(new_prop.nsn())
+                        .await,
+                    Some(&new_prop)
+                );
+                debug_assert_eq!(
+                    get_or_insert_calendar(&mut remote, &s.calendar)
+                        .await
+                        .unwrap()
+                        .lock()
+                        .unwrap()
+                        .get_property_by_name(new_prop.nsn())
+                        .await,
+                    Some(&new_prop)
+                );
             }
         }
     }

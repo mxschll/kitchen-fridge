@@ -3,7 +3,7 @@
 //! It is also responsible for syncing them together
 
 use std::collections::{HashMap, HashSet};
-use std::fmt::{Display, Formatter};
+use std::fmt::{Display, Formatter, Write};
 use std::marker::PhantomData;
 use std::sync::{Arc, Mutex};
 
@@ -14,7 +14,7 @@ use crate::error::KFResult;
 use crate::traits::CompleteCalendar;
 use crate::traits::{BaseCalendar, CalDavSource, DavCalendar};
 use crate::utils::prop::Property;
-use crate::utils::sync::{SyncStatus, Syncable, VersionTag};
+use crate::utils::sync::{SyncStatus, Syncable};
 use crate::utils::NamespacedName;
 
 pub mod sync_progress;
@@ -60,6 +60,35 @@ struct PropChanges {
     remote_prop_changes: HashSet<Property>,
     local_prop_additions: HashSet<Property>,
     remote_prop_additions: HashSet<Property>,
+}
+impl std::fmt::Debug for PropChanges {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str("local_prop_dels:")?;
+        for x in &self.local_prop_dels {
+            f.write_str(format!("\n* {}", x).as_str())?;
+        }
+        f.write_str("\nremote_prop_dels:")?;
+        for x in &self.remote_prop_dels {
+            f.write_str(format!("\n* {}", x).as_str())?;
+        }
+        f.write_str("\nlocal_prop_changes:")?;
+        for x in &self.local_prop_changes {
+            f.write_str(format!("\n* {}", x).as_str())?;
+        }
+        f.write_str("\nremote_prop_changes:")?;
+        for x in &self.remote_prop_changes {
+            f.write_str(format!("\n* {}", x).as_str())?;
+        }
+        f.write_str("\nlocal_prop_additions:")?;
+        for x in &self.local_prop_additions {
+            f.write_str(format!("\n* {}", x).as_str())?;
+        }
+        f.write_str("\nremote_prop_additions:")?;
+        for x in &self.remote_prop_additions {
+            f.write_str(format!("\n* {}", x).as_str())?;
+        }
+        f.write_char('\n')
+    }
 }
 
 /// A data source that combines two `CalDavSource`s, which is able to sync both sources.
@@ -283,6 +312,8 @@ where
             Self::calculate_prop_changes(&cal_local, &cal_remote, progress, cal_name.clone())
                 .await?;
 
+        log::debug!("Prop changes: {:?}", prop_changes);
+
         // Step 2 - commit changes to tasks
         Self::commit_item_changes(
             &mut cal_local,
@@ -306,6 +337,7 @@ where
         Ok(())
     }
 
+    /// Summarizes the delta between local and remote
     async fn calculate_item_changes(
         cal_local: &T,
         cal_remote: &U,
@@ -431,6 +463,7 @@ where
         })
     }
 
+    /// Summarizes the delta between local and remote
     async fn calculate_prop_changes(
         cal_local: &T,
         cal_remote: &U,
@@ -493,8 +526,8 @@ where
                         SyncStatus::LocallyModified(local_tag) => {
                             if remote_prop.value().as_str() == local_tag.as_str() {
                                 // This has been changed locally
-                                progress.debug(&format!("*   {} is a local change", remote_prop));
-                                local_prop_changes.insert(remote_prop.nsn().clone());
+                                progress.debug(&format!("*   {} is a local change", local_prop));
+                                local_prop_changes.insert(local_prop.nsn().clone());
                             } else {
                                 progress.info(&format!("Conflict: prop {} has been modified in both sources. Using the remote version.", prop_name));
                                 progress.debug(&format!(
@@ -563,6 +596,7 @@ where
         })
     }
 
+    /// Based on the delta between local and remote, make whatever changes are necessary to bring the two sources into sync
     async fn commit_item_changes(
         cal_local: &mut T,
         cal_remote: &mut U,
@@ -706,6 +740,7 @@ where
         Ok(())
     }
 
+    /// Based on the delta between local and remote, make whatever changes are necessary to bring the two sources into sync
     async fn commit_prop_changes(
         cal_local: &mut T,
         cal_remote: &mut U,
@@ -713,6 +748,7 @@ where
         cal_name: String,
         prop_changes: PropChanges,
     ) -> KFResult<()> {
+        log::debug!("committing prop changes: {:?}", prop_changes);
         let PropChanges {
             local_prop_dels,
             remote_prop_dels,
@@ -722,14 +758,6 @@ where
             remote_prop_additions,
         } = prop_changes;
         progress.trace("Committing changes to props...");
-
-        log::debug!("committing prop changes");
-        log::debug!("local_prop_dels: {:?}", local_prop_dels);
-        log::debug!("remote_prop_dels: {:?}", remote_prop_dels);
-        log::debug!("local_prop_changes: {:?}", local_prop_changes);
-        log::debug!("remote_prop_changes: {:?}", remote_prop_changes);
-        log::debug!("local_prop_additions: {:?}", local_prop_additions);
-        log::debug!("remote_prop_additions: {:?}", remote_prop_additions);
 
         for prop_del in local_prop_dels {
             progress.debug(&format!(
@@ -845,15 +873,30 @@ where
                     continue;
                 }
                 Some(local_prop) => {
+                    // Update local sync status
+                    // We do this before set_property so the remote is also marked as being in sync
+                    log::debug!("Marking local prop as synced: {}", local_prop,);
+                    local_prop.mark_synced();
+                    log::debug!("Marked local prop as synced: {}", local_prop,);
+
+                    debug_assert_eq!(
+                        local_prop.sync_status(),
+                        &SyncStatus::Synced(local_prop.value().clone().into())
+                    );
                     match cal_remote.set_property(local_prop.clone()).await {
                         Err(err) => progress.error(&format!(
                             "Unable to update prop {} in remote calendar: {}",
                             prop_change, err
                         )),
                         Ok(_) => {
-                            // Update local sync status
-                            log::debug!("Marking local prop as synced: {}", local_prop);
-                            local_prop.mark_synced();
+                            debug_assert_eq!(
+                                cal_remote
+                                    .get_property(local_prop.nsn())
+                                    .await
+                                    .unwrap()
+                                    .unwrap(),
+                                *local_prop
+                            );
                         }
                     };
                 }
