@@ -20,15 +20,16 @@ use crate::mock_behaviour::MockBehaviour;
 #[cfg(feature = "local_calendar_mocks_remote_calendars")]
 use std::sync::{Arc, Mutex};
 
-fn print_props(props: &HashMap<NamespacedName, Property>) {
+fn print_props(desc: &str, props: &HashMap<NamespacedName, Property>) {
     let ordered = {
         let mut p: Vec<(&NamespacedName, &Property)> = props.iter().collect();
         p.sort_by(|a, b| a.0.cmp(b.0));
         p
     };
 
+    log::debug!("{}", desc);
     for (nsn, prop) in ordered {
-        log::debug!("{}: {}", nsn, prop.value());
+        log::debug!("{}: {}", nsn, prop);
     }
 }
 
@@ -110,7 +111,12 @@ impl CachedCalendar {
 
     /// Some kind of equality check
     #[cfg(any(test, feature = "integration_tests"))]
-    pub async fn has_same_observable_content_as(&self, other: &CachedCalendar) -> KFResult<bool> {
+    pub async fn has_same_observable_content_as(
+        &self,
+        other: &CachedCalendar,
+        self_desc: &str,
+        other_desc: &str,
+    ) -> KFResult<bool> {
         if self.name != other.name
             || self.url != other.url
             || self.supported_components != other.supported_components
@@ -144,8 +150,8 @@ impl CachedCalendar {
 
         if !crate::utils::keys_are_the_same(props_a, props_b) {
             log::debug!("Different keys for props");
-            print_props(props_a);
-            print_props(props_b);
+            print_props(self_desc, props_a);
+            print_props(other_desc, props_b);
             return Ok(false);
         }
 
@@ -155,8 +161,8 @@ impl CachedCalendar {
                 .expect("should not happen, we've just tested keys are the same");
             if prop_a != prop_b {
                 log::debug!("Different props for nsn {}:", nsn);
-                log::debug!("{:#?}", prop_a);
-                log::debug!("{:#?}", prop_b);
+                log::debug!("{}: {:#?}", self_desc, prop_a);
+                log::debug!("{}: {:#?}", other_desc, prop_b);
                 return Ok(false);
             }
         }

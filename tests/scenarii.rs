@@ -106,11 +106,11 @@ pub struct PropScenario {
 ///   A-F are in a calendar, G-M are in a second one, and in a third calendar from N on
 ///
 /// * Before the newer sync, this will be the content of the sources:
-///     * cache:  A, B,    D', E,  F'', G , H✓, I✓, J✓,        M,  N✓, O, P' ,    R
-///     * server: A,    C, D,  E', F',  G✓, H , I',      K✓,    M✓, N , O, P✓,  Q
+///     * cache:  A, B,    D', E,  F'', G , H✓, I✓, J✓,       M,  N✓, O, P',     R
+///     * server: A,    C, D,  E', F',  G✓, H , I',     K✓,   M✓, N , O, P✓,  Q
 ///
 /// Hence, here is the expected result after the sync:
-///     * both:   A,       D', E', F',  G✓, H✓, I',      K✓,   M, N, O, P', Q, R
+///     * both:   A,       D', E', F',  G✓, H✓, I',     K✓,   M,  N , O, P',  Q, R
 ///
 /// Notes:
 /// * X': name has been modified since the last sync
@@ -666,11 +666,11 @@ pub fn item_scenarii_transient_task() -> Vec<ItemScenario> {
 ///   A-F are in a calendar, G-M are in a second one, and in a third calendar from N on
 ///
 /// * Before the newer sync, this will be the content of the sources:
-///     * cache:  A, B,    D', E,  F'', G , H✓, I✓, J✓,        M,  N✓, O, P' ,    R
-///     * server: A,    C, D,  E', F',  G✓, H , I',      K✓,    M✓, N , O, P✓,  Q
+///     * cache:  A, B,    D', E,  F'', G , H✓, I✓, J✓,       M,  N✓, O, P',     R
+///     * server: A,    C, D,  E', F',  G✓, H , I',     K✓,   M✓, N , O, P✓,  Q
 ///
 /// Hence, here is the expected result after the sync:
-///     * both:   A,       D', E', F',  G✓, H✓, I',      K✓,   M, N, O, P', Q, R
+///     * both:   A,       D', E', F',  G✓, H✓, I',     K✓,   M,  N , O, P',  Q, R
 ///
 /// Notes:
 /// * X': name has been modified since the last sync

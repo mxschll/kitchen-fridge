@@ -175,7 +175,12 @@ impl Cache {
     ///
     /// This is not a complete equality test: some attributes (sync status...) may differ. This should mostly be used in tests
     #[cfg(any(test, feature = "integration_tests"))]
-    pub async fn has_same_observable_content_as(&self, other: &Self) -> KFResult<bool> {
+    pub async fn has_same_observable_content_as(
+        &self,
+        other: &Self,
+        self_desc: &str,
+        other_desc: &str,
+    ) -> KFResult<bool> {
         let calendars_l = self.get_calendars().await?;
         let calendars_r = other.get_calendars().await?;
 
@@ -194,7 +199,10 @@ impl Cache {
                 .unwrap();
 
             // TODO: check calendars have the same names/ID/whatever
-            if !(cal_l.has_same_observable_content_as(&cal_r).await?) {
+            if !(cal_l
+                .has_same_observable_content_as(&cal_r, self_desc, other_desc)
+                .await?)
+            {
                 log::debug!("Different calendars");
                 return Ok(false);
             }
@@ -374,7 +382,9 @@ mod tests {
 
         let retrieved_cache = Cache::from_folder(&cache_path).unwrap();
         assert_eq!(cache.backing_folder, retrieved_cache.backing_folder);
-        let test = cache.has_same_observable_content_as(&retrieved_cache).await;
+        let test = cache
+            .has_same_observable_content_as(&retrieved_cache, "cache", "retrieved cache")
+            .await;
         println!("Equal? {:?}", test);
         assert!(test.unwrap());
     }

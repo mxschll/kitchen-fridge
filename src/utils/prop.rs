@@ -71,9 +71,11 @@ impl Property {
     /// Set property value, but forces a "master" SyncStatus, just like CalDAV servers are always "masters"
     #[cfg(feature = "local_calendar_mocks_remote_calendars")]
     pub fn mock_remote_calendar_set_value(&mut self, new_value: String) {
-        self.sync_status = SyncStatus::random_synced();
+        // self.sync_status = SyncStatus::random_synced();
+
         // self.update_last_modified();
         self.value = new_value;
+        self.mark_synced();
     }
 }
 impl Syncable for Property {

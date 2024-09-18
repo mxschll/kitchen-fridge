@@ -275,7 +275,7 @@ impl TestFlavour {
         // Check the contents of both sources are the same after sync
         assert!(provider
             .remote()
-            .has_same_observable_content_as(provider.local())
+            .has_same_observable_content_as(provider.local(), "remote", "local")
             .await
             .unwrap());
 
@@ -289,12 +289,20 @@ impl TestFlavour {
 
         assert!(provider
             .local()
-            .has_same_observable_content_as(expected_provider.local())
+            .has_same_observable_content_as(
+                expected_provider.local(),
+                "local",
+                "expected after sync"
+            )
             .await
             .unwrap());
         assert!(provider
             .remote()
-            .has_same_observable_content_as(expected_provider.remote())
+            .has_same_observable_content_as(
+                expected_provider.remote(),
+                "remote",
+                "expected after sync"
+            )
             .await
             .unwrap());
 
@@ -303,12 +311,20 @@ impl TestFlavour {
         provider.sync().await;
         assert!(provider
             .local()
-            .has_same_observable_content_as(expected_provider.local())
+            .has_same_observable_content_as(
+                expected_provider.local(),
+                "local",
+                "expecgted after second sync"
+            )
             .await
             .unwrap());
         assert!(provider
             .remote()
-            .has_same_observable_content_as(expected_provider.remote())
+            .has_same_observable_content_as(
+                expected_provider.remote(),
+                "remote",
+                "expected after second sync"
+            )
             .await
             .unwrap());
     }

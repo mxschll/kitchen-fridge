@@ -433,6 +433,7 @@ where
             match local_item.sync_status() {
                 SyncStatus::Synced(_) => {
                     // This item has been removed from the remote
+                    //NOTE This implies "server supremacy"---the server is not a peer
                     progress.debug(&format!("#   {} is a deletion from the server", url));
                     remote_item_dels.insert(url);
                 }
@@ -563,6 +564,7 @@ where
             match local_prop.sync_status() {
                 SyncStatus::Synced(_) => {
                     // This item has been removed from the remote
+                    //NOTE This implies "server supremacy"---the server is not a peer
                     progress.debug(&format!("#   {} is a deletion from the server", local_prop));
                     remote_prop_dels.insert(prop_name);
                 }
