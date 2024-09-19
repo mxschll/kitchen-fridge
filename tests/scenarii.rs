@@ -662,202 +662,212 @@ pub fn item_scenarii_transient_task() -> Vec<ItemScenario> {
 }
 
 /// Generate the scenarii required for the following test:
-/// * At the last sync: both sources had A, B, C, D, E, F, G, H, I, J, K, L, M✓, N✓, O✓, P✓ at last sync
-///   A-F are in a calendar, G-M are in a second one, and in a third calendar from N on
+/// At last sync, we had three calendars with the following properties:
+///  1: A, B, C, D, E, F
+///  2: L
 ///
-/// * Before the newer sync, this will be the content of the sources:
-///     * cache:  A, B,    D', E,  F'', G , H✓, I✓, J✓,       M,  N✓, O, P',     R
-///     * server: A,    C, D,  E', F',  G✓, H , I',     K✓,   M✓, N , O, P✓,  Q
+/// Before the newer sync, this will be the content of the sources:
+/// * cache:  1. A, B,    D', E,  F''    2.      3.    R
+/// * server: 1. A,    C, D,  E', F'     2.      3. Q
 ///
 /// Hence, here is the expected result after the sync:
-///     * both:   A,       D', E', F',  G✓, H✓, I',     K✓,   M,  N , O, P',  Q, R
+///  1. A,       D', E', F'
+///  2.
+///  3. Q, R
 ///
 /// Notes:
-/// * X': name has been modified since the last sync
-/// * X'/X'': name conflict
-/// * X✓: task has been marked as completed
+/// * X': value has been modified since the last sync
+/// * X'/X'': value conflict
 pub fn prop_scenarii_basic() -> Vec<PropScenario> {
     let mut tasks = Vec::new();
 
-    let first_cal: Url = "https://some.calend.ar/calendar-1/".parse().unwrap();
-    let second_cal: Url = "https://some.calend.ar/calendar-2/".parse().unwrap();
-    let third_cal: Url = "https://some.calend.ar/calendar-3/".parse().unwrap();
+    let n = |name: String| NamespacedName {
+        xmlns: "https://github.com/daladim/kitchen-fridge/__test_xmlns__/".to_string(),
+        name,
+    };
 
     {
-        let nsn = random_nsn();
-        tasks.push(PropScenario {
-            nsn: nsn.clone(),
-            initial_state: LocatedState::BothSynced(PropState {
-                calendar: first_cal.clone(),
+        let cal: Url = "https://some.calend.ar/calendar-1/".parse().unwrap();
+        {
+            let nsn = n("a".into());
+            tasks.push(PropScenario {
                 nsn: nsn.clone(),
-                value: String::from("Value A"),
-            }),
-            local_changes_to_apply: Vec::new(),
-            remote_changes_to_apply: Vec::new(),
-            after_sync: LocatedState::BothSynced(PropState {
-                calendar: first_cal.clone(),
-                nsn,
-                value: String::from("Value A"),
-            }),
-        });
+                initial_state: LocatedState::BothSynced(PropState {
+                    calendar: cal.clone(),
+                    nsn: nsn.clone(),
+                    value: String::from("Value A"),
+                }),
+                local_changes_to_apply: Vec::new(),
+                remote_changes_to_apply: Vec::new(),
+                after_sync: LocatedState::BothSynced(PropState {
+                    calendar: cal.clone(),
+                    nsn,
+                    value: String::from("Value A"),
+                }),
+            });
+        }
+
+        {
+            let nsn = n("b".into());
+            tasks.push(PropScenario {
+                nsn: nsn.clone(),
+                initial_state: LocatedState::BothSynced(PropState {
+                    calendar: cal.clone(),
+                    nsn,
+                    value: String::from("Value B"),
+                }),
+                local_changes_to_apply: Vec::new(),
+                remote_changes_to_apply: vec![PropChange::Remove],
+                after_sync: LocatedState::None,
+            });
+        }
+
+        {
+            let nsn = n("c".into());
+            tasks.push(PropScenario {
+                nsn: nsn.clone(),
+                initial_state: LocatedState::BothSynced(PropState {
+                    calendar: cal.clone(),
+                    nsn,
+                    value: String::from("Value C"),
+                }),
+                local_changes_to_apply: vec![PropChange::Remove],
+                remote_changes_to_apply: Vec::new(),
+                after_sync: LocatedState::None,
+            });
+        }
+        {
+            let nsn = n("d".into());
+            tasks.push(PropScenario {
+                nsn: nsn.clone(),
+                initial_state: LocatedState::BothSynced(PropState {
+                    calendar: cal.clone(),
+                    nsn: nsn.clone(),
+                    value: String::from("Value D"),
+                }),
+                local_changes_to_apply: vec![PropChange::Set(PropState {
+                    calendar: cal.clone(),
+                    nsn: nsn.clone(),
+                    value: String::from("Value D, locally changed"),
+                })],
+
+                remote_changes_to_apply: Vec::new(),
+                after_sync: LocatedState::BothSynced(PropState {
+                    calendar: cal.clone(),
+                    nsn,
+                    value: String::from("Value D, locally changed"),
+                }),
+            });
+        }
+
+        {
+            let nsn = n("e".into());
+            tasks.push(PropScenario {
+                nsn: nsn.clone(),
+                initial_state: LocatedState::BothSynced(PropState {
+                    calendar: cal.clone(),
+                    nsn: nsn.clone(),
+                    value: String::from("Value E"),
+                }),
+                local_changes_to_apply: Vec::new(),
+                remote_changes_to_apply: vec![PropChange::Set(PropState {
+                    calendar: cal.clone(),
+                    nsn: nsn.clone(),
+                    value: String::from("Value E, remotely changed"),
+                })],
+                after_sync: LocatedState::BothSynced(PropState {
+                    calendar: cal.clone(),
+                    nsn,
+                    value: String::from("Value E, remotely changed"),
+                }),
+            });
+        }
+        {
+            let nsn = n("f".into());
+            tasks.push(PropScenario {
+                nsn: nsn.clone(),
+                initial_state: LocatedState::BothSynced(PropState {
+                    calendar: cal.clone(),
+                    nsn: nsn.clone(),
+                    value: String::from("Value F"),
+                }),
+                local_changes_to_apply: vec![PropChange::Set(PropState {
+                    calendar: cal.clone(),
+                    nsn: nsn.clone(),
+                    value: String::from("Value F, locally changed"),
+                })],
+                remote_changes_to_apply: vec![PropChange::Set(PropState {
+                    calendar: cal.clone(),
+                    nsn: nsn.clone(),
+                    value: String::from("Value F, remotely changed"),
+                })],
+                // Conflict: the server wins
+                after_sync: LocatedState::BothSynced(PropState {
+                    calendar: cal.clone(),
+                    nsn,
+                    value: String::from("Value F, remotely changed"),
+                }),
+            });
+        }
     }
 
     {
-        let nsn = random_nsn();
-        tasks.push(PropScenario {
-            nsn: nsn.clone(),
-            initial_state: LocatedState::BothSynced(PropState {
-                calendar: first_cal.clone(),
-                nsn,
-                value: String::from("Value B"),
-            }),
-            local_changes_to_apply: Vec::new(),
-            remote_changes_to_apply: vec![PropChange::Remove],
-            after_sync: LocatedState::None,
-        });
+        let cal: Url = "https://some.calend.ar/calendar-2/".parse().unwrap();
+        {
+            let nsn = n("l".into());
+            tasks.push(PropScenario {
+                nsn: nsn.clone(),
+                initial_state: LocatedState::BothSynced(PropState {
+                    calendar: cal.clone(),
+                    nsn,
+                    value: String::from("Value L"),
+                }),
+                local_changes_to_apply: vec![PropChange::Remove],
+                remote_changes_to_apply: vec![PropChange::Remove],
+                after_sync: LocatedState::None,
+            });
+        }
     }
 
     {
-        let nsn = random_nsn();
-        tasks.push(PropScenario {
-            nsn: nsn.clone(),
-            initial_state: LocatedState::BothSynced(PropState {
-                calendar: first_cal.clone(),
-                nsn,
-                value: String::from("Value C"),
-            }),
-            local_changes_to_apply: vec![PropChange::Remove],
-            remote_changes_to_apply: Vec::new(),
-            after_sync: LocatedState::None,
-        });
-    }
+        let cal: Url = "https://some.calend.ar/calendar-3/".parse().unwrap();
+        {
+            let nsn = n("q".into());
+            tasks.push(PropScenario {
+                nsn: nsn.clone(),
+                initial_state: LocatedState::None,
+                local_changes_to_apply: Vec::new(),
+                remote_changes_to_apply: vec![PropChange::Set(PropState {
+                    calendar: cal.clone(),
+                    nsn: nsn.clone(),
+                    value: "Value Q, created on the server".to_string(),
+                })],
+                after_sync: LocatedState::BothSynced(PropState {
+                    calendar: cal.clone(),
+                    nsn,
+                    value: String::from("Value Q, created on the server"),
+                }),
+            });
+        }
 
-    {
-        let nsn = random_nsn();
-        tasks.push(PropScenario {
-            nsn: nsn.clone(),
-            initial_state: LocatedState::BothSynced(PropState {
-                calendar: first_cal.clone(),
+        {
+            let nsn = n("r".into());
+            tasks.push(PropScenario {
                 nsn: nsn.clone(),
-                value: String::from("Value D"),
-            }),
-            local_changes_to_apply: vec![PropChange::Set(PropState {
-                calendar: first_cal.clone(),
-                nsn: nsn.clone(),
-                value: String::from("Value D, locally changed"),
-            })],
-
-            remote_changes_to_apply: Vec::new(),
-            after_sync: LocatedState::BothSynced(PropState {
-                calendar: first_cal.clone(),
-                nsn,
-                value: String::from("Value D, locally changed"),
-            }),
-        });
-    }
-
-    {
-        let nsn = random_nsn();
-        tasks.push(PropScenario {
-            nsn: nsn.clone(),
-            initial_state: LocatedState::BothSynced(PropState {
-                calendar: first_cal.clone(),
-                nsn: nsn.clone(),
-                value: String::from("Value E"),
-            }),
-            local_changes_to_apply: Vec::new(),
-            remote_changes_to_apply: vec![PropChange::Set(PropState {
-                calendar: first_cal.clone(),
-                nsn: nsn.clone(),
-                value: String::from("Value E, remotely changed"),
-            })],
-            after_sync: LocatedState::BothSynced(PropState {
-                calendar: first_cal.clone(),
-                nsn,
-                value: String::from("Value E, remotely changed"),
-            }),
-        });
-    }
-
-    {
-        let nsn = random_nsn();
-        tasks.push(PropScenario {
-            nsn: nsn.clone(),
-            initial_state: LocatedState::BothSynced(PropState {
-                calendar: first_cal.clone(),
-                nsn: nsn.clone(),
-                value: String::from("Value F"),
-            }),
-            local_changes_to_apply: vec![PropChange::Set(PropState {
-                calendar: first_cal.clone(),
-                nsn: nsn.clone(),
-                value: String::from("Value F, locally changed"),
-            })],
-            remote_changes_to_apply: vec![PropChange::Set(PropState {
-                calendar: first_cal.clone(),
-                nsn: nsn.clone(),
-                value: String::from("Value F, remotely changed"),
-            })],
-            // Conflict: the server wins
-            after_sync: LocatedState::BothSynced(PropState {
-                calendar: first_cal.clone(),
-                nsn,
-                value: String::from("Value F, remotely changed"),
-            }),
-        });
-    }
-
-    {
-        let nsn = random_nsn();
-        tasks.push(PropScenario {
-            nsn: nsn.clone(),
-            initial_state: LocatedState::BothSynced(PropState {
-                calendar: second_cal.clone(),
-                nsn,
-                value: String::from("Value L"),
-            }),
-            local_changes_to_apply: vec![PropChange::Remove],
-            remote_changes_to_apply: vec![PropChange::Remove],
-            after_sync: LocatedState::None,
-        });
-    }
-
-    {
-        let nsn = random_nsn();
-        tasks.push(PropScenario {
-            nsn: nsn.clone(),
-            initial_state: LocatedState::None,
-            local_changes_to_apply: Vec::new(),
-            remote_changes_to_apply: vec![PropChange::Set(PropState {
-                calendar: third_cal.clone(),
-                nsn: nsn.clone(),
-                value: "Value Q, created on the server".to_string(),
-            })],
-            after_sync: LocatedState::BothSynced(PropState {
-                calendar: third_cal.clone(),
-                nsn,
-                value: String::from("Value Q, created on the server"),
-            }),
-        });
-    }
-
-    {
-        let nsn = random_nsn();
-        tasks.push(PropScenario {
-            nsn: nsn.clone(),
-            initial_state: LocatedState::None,
-            local_changes_to_apply: vec![PropChange::Set(PropState {
-                calendar: third_cal.clone(),
-                nsn: nsn.clone(),
-                value: String::from("Value R, created locally"),
-            })],
-            remote_changes_to_apply: Vec::new(),
-            after_sync: LocatedState::BothSynced(PropState {
-                calendar: third_cal.clone(),
-                nsn,
-                value: String::from("Value R, created locally"),
-            }),
-        });
+                initial_state: LocatedState::None,
+                local_changes_to_apply: vec![PropChange::Set(PropState {
+                    calendar: cal.clone(),
+                    nsn: nsn.clone(),
+                    value: String::from("Value R, created locally"),
+                })],
+                remote_changes_to_apply: Vec::new(),
+                after_sync: LocatedState::BothSynced(PropState {
+                    calendar: cal.clone(),
+                    nsn,
+                    value: String::from("Value R, created locally"),
+                }),
+            });
+        }
     }
 
     tasks
