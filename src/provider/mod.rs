@@ -811,20 +811,13 @@ where
         Self::apply_remote_prop_additions(
             remote_prop_additions,
             &mut *cal_local,
-            &mut *cal_remote,
             progress,
             &cal_name,
         )
         .await;
 
-        Self::apply_remote_prop_changes(
-            remote_prop_changes,
-            &mut *cal_local,
-            &mut *cal_remote,
-            progress,
-            &cal_name,
-        )
-        .await;
+        Self::apply_remote_prop_changes(remote_prop_changes, &mut *cal_local, progress, &cal_name)
+            .await;
 
         for prop_add in local_prop_additions {
             progress.debug(&format!(
@@ -1027,7 +1020,6 @@ where
     async fn apply_remote_prop_additions(
         mut remote_additions: HashSet<Property>,
         cal_local: &mut T,
-        cal_remote: &mut U,
         progress: &mut SyncProgress,
         cal_name: &str,
     ) {
@@ -1040,7 +1032,6 @@ where
                 BatchDownloadType::RemoteAdditions,
                 batch,
                 cal_local,
-                cal_remote,
                 progress,
                 cal_name,
             )
@@ -1051,7 +1042,6 @@ where
     async fn apply_remote_prop_changes(
         mut remote_changes: HashSet<Property>,
         cal_local: &mut T,
-        cal_remote: &mut U,
         progress: &mut SyncProgress,
         cal_name: &str,
     ) {
@@ -1064,7 +1054,6 @@ where
                 BatchDownloadType::RemoteChanges,
                 batch,
                 cal_local,
-                cal_remote,
                 progress,
                 cal_name,
             )
@@ -1076,61 +1065,39 @@ where
         batch_type: BatchDownloadType,
         remote_additions: I,
         cal_local: &mut T,
-        cal_remote: &mut U,
         progress: &mut SyncProgress,
         cal_name: &str,
     ) {
         progress.debug(&format!("> Applying a batch of {} locally", batch_type) /* too bad Chunks does not implement ExactSizeIterator, that could provide useful debug info. See https://github.com/rust-itertools/itertools/issues/171 */);
-
         let list_of_additions: Vec<Property> = remote_additions.collect();
-        let addition_names: Vec<NamespacedName> =
-            list_of_additions.iter().map(|p| p.nsn()).cloned().collect();
-        match cal_remote.get_properties_by_name(&addition_names).await {
-            Err(err) => {
-                progress.warn(&format!(
-                    "Unable to get the batch of {} {:?}: {}. Skipping them.",
-                    batch_type, list_of_additions, err
+        for new_prop in &list_of_additions {
+            let local_update_result = match batch_type {
+                BatchDownloadType::RemoteAdditions => {
+                    cal_local.add_property(new_prop.clone()).await
+                }
+                BatchDownloadType::RemoteChanges => {
+                    cal_local.update_property(new_prop.clone()).await
+                }
+            };
+            if let Err(err) = local_update_result {
+                progress.error(&format!(
+                    "Not able to add property {} to local calendar: {}",
+                    new_prop, err
                 ));
             }
-            Ok(props) => {
-                for prop in props {
-                    match prop {
-                        None => {
-                            progress.error("Inconsistency: an item from the batch has vanished from the remote end");
-                            continue;
-                        }
-                        Some(new_prop) => {
-                            let local_update_result = match batch_type {
-                                BatchDownloadType::RemoteAdditions => {
-                                    cal_local.add_property(new_prop.clone()).await
-                                }
-                                BatchDownloadType::RemoteChanges => {
-                                    cal_local.update_property(new_prop.clone()).await
-                                }
-                            };
-                            if let Err(err) = local_update_result {
-                                progress.error(&format!(
-                                    "Not able to add property {} to local calendar: {}",
-                                    new_prop, err
-                                ));
-                            }
-                        }
-                    }
-                }
-
-                // Notifying every prop at the same time would not make sense. Let's notify only one of them
-                let one_prop_name = match list_of_additions.first() {
-                    Some(prop) => prop.to_string(),
-                    None => String::from("<unable to get the name of the first batched prop>"),
-                };
-                progress.increment_counter(list_of_additions.len());
-                progress.feedback(SyncEvent::PropsInProgress {
-                    calendar_name: cal_name.to_string(),
-                    props_done_already: progress.counter(),
-                    details: one_prop_name,
-                });
-            }
         }
+
+        // Notifying every prop at the same time would not make sense. Let's notify only one of them
+        let one_prop_name = match list_of_additions.first() {
+            Some(prop) => prop.to_string(),
+            None => String::from("<unable to get the name of the first batched prop>"),
+        };
+        progress.increment_counter(list_of_additions.len());
+        progress.feedback(SyncEvent::PropsInProgress {
+            calendar_name: cal_name.to_string(),
+            props_done_already: progress.counter(),
+            details: one_prop_name,
+        });
     }
 }
 
