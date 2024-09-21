@@ -14,7 +14,7 @@ use crate::error::KFResult;
 use crate::traits::CompleteCalendar;
 use crate::traits::{BaseCalendar, CalDavSource, DavCalendar};
 use crate::utils::prop::Property;
-use crate::utils::sync::{SyncStatus, Syncable};
+use crate::utils::sync::{SyncStatus, Syncable, VersionTag};
 use crate::utils::NamespacedName;
 
 pub mod sync_progress;
@@ -875,6 +875,9 @@ where
                             prop_change, err
                         )),
                         Ok(ss) => {
+                            // Update local sync status
+                            local_prop.set_sync_status(ss);
+
                             debug_assert_eq!(
                                 cal_remote
                                     .get_property(local_prop.nsn())
@@ -883,9 +886,6 @@ where
                                     .unwrap(),
                                 *local_prop
                             );
-
-                            // Update local sync status
-                            local_prop.set_sync_status(ss);
                         }
                     };
                 }
@@ -1065,13 +1065,18 @@ where
         progress.debug(&format!("> Applying a batch of {} locally", batch_type) /* too bad Chunks does not implement ExactSizeIterator, that could provide useful debug info. See https://github.com/rust-itertools/itertools/issues/171 */);
         let list_of_additions: Vec<Property> = remote_additions.collect();
         for new_prop in &list_of_additions {
+            let synced_prop = {
+                let mut p = new_prop.clone();
+
+                // NOTE We mark the property's sync status as Synced with its own value as the version tag
+                // See RemoteCalendar::set_property for more information on why
+                p.set_sync_status(SyncStatus::Synced(VersionTag::from(p.value().clone())));
+
+                p
+            };
             let local_update_result = match batch_type {
-                BatchDownloadType::RemoteAdditions => {
-                    cal_local.add_property(new_prop.clone()).await
-                }
-                BatchDownloadType::RemoteChanges => {
-                    cal_local.update_property(new_prop.clone()).await
-                }
+                BatchDownloadType::RemoteAdditions => cal_local.add_property(synced_prop).await,
+                BatchDownloadType::RemoteChanges => cal_local.update_property(synced_prop).await,
             };
 
             if let Err(err) = local_update_result {

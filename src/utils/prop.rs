@@ -3,7 +3,7 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 
 use super::{
-    sync::{SyncStatus, Syncable},
+    sync::{SyncStatus, Syncable, VersionTag},
     NamespacedName,
 };
 
@@ -68,13 +68,19 @@ impl Property {
         self.sync_status = SyncStatus::LocallyDeleted(self.value.clone().into());
     }
 
+    /// Mark the property as Synced with its own value as the version tag
+    /// See RemoteCalendar::set_property for more information on why
+    pub fn mark_synced_to_self(&mut self) {
+        self.sync_status = SyncStatus::Synced(VersionTag::from(self.value.clone()));
+    }
+
     /// Set property value, but forces a "master" SyncStatus, just like CalDAV servers are always "masters"
     #[cfg(feature = "local_calendar_mocks_remote_calendars")]
     pub fn mock_remote_calendar_set_value(&mut self, new_value: String) {
         // self.update_last_modified();
         self.value = new_value;
-        self.sync_status = SyncStatus::random_synced();
-        // self.mark_synced();
+        // self.sync_status = SyncStatus::random_synced();
+        self.mark_synced_to_self();
     }
 }
 impl Syncable for Property {

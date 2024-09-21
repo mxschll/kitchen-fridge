@@ -176,6 +176,9 @@ impl BaseCalendar for RemoteCalendar {
             });
         }
 
+        // We use the property value itself, rather than a server-generated etag, because it fully captures its own content
+        // This saves us a PROPFIND to query the etag
+        // If property values ever get too large, we may have to change the approach
         Ok(SyncStatus::Synced(VersionTag::from(prop.value().clone())))
     }
 

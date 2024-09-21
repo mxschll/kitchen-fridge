@@ -137,10 +137,12 @@ impl CachedCalendar {
 
     #[cfg(feature = "local_calendar_mocks_remote_calendars")]
     fn set_property_force_synced(&mut self, mut prop: Property) -> SyncStatus {
+        // NOTE The Synced version tag for a Property is just the property value
+        // See also RemoteCalendar::set_property for why
         log::debug!("Adding or updating a prop, but forces a synced SyncStatus");
         match prop.sync_status() {
             SyncStatus::Synced(_) => (),
-            _ => prop.set_sync_status(SyncStatus::random_synced()),
+            _ => prop.set_sync_status(SyncStatus::Synced(VersionTag::from(prop.value().clone()))),
         };
 
         self.regular_set_property(prop)
