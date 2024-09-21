@@ -1070,7 +1070,7 @@ where
 
                 // NOTE We mark the property's sync status as Synced with its own value as the version tag
                 // See RemoteCalendar::set_property for more information on why
-                p.set_sync_status(SyncStatus::Synced(VersionTag::from(p.value().clone())));
+                p.mark_synced_to_self();
 
                 p
             };

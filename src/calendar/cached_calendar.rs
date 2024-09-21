@@ -142,7 +142,7 @@ impl CachedCalendar {
         log::debug!("Adding or updating a prop, but forces a synced SyncStatus");
         match prop.sync_status() {
             SyncStatus::Synced(_) => (),
-            _ => prop.set_sync_status(SyncStatus::Synced(VersionTag::from(prop.value().clone()))),
+            _ => prop.mark_synced_to_self(),
         };
 
         self.regular_set_property(prop)
