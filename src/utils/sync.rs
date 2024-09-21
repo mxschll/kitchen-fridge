@@ -66,8 +66,8 @@ pub trait Syncable {
         }
     }
 
-    fn mark_synced(&mut self) {
-        self.set_sync_status(SyncStatus::Synced(VersionTag::from(self.value().clone())));
+    fn mark_synced(&mut self, synced_to: VersionTag) {
+        self.set_sync_status(SyncStatus::Synced(synced_to));
     }
 }
 

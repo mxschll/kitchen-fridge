@@ -11,6 +11,7 @@ use crate::error::KFResult;
 use crate::traits::{BaseCalendar, CompleteCalendar};
 use crate::utils::prop::Property;
 use crate::utils::sync::SyncStatus;
+use crate::utils::sync::Syncable;
 use crate::utils::sync::VersionTag;
 use crate::utils::NamespacedName;
 use crate::Item;
@@ -96,6 +97,31 @@ impl CachedCalendar {
         ss_clone
     }
 
+    fn regular_set_property(&mut self, prop: Property) -> SyncStatus {
+        if let Some(p) = self.properties.get_mut(prop.nsn()) {
+            //NOTE Should be okay since the key remains the same, thus the hash remains the same
+            *p = prop.clone();
+        } else {
+            self.properties.insert(prop.nsn().clone(), prop.clone());
+        }
+
+        debug_assert_eq!(self.properties.get(prop.nsn()), Some(&prop));
+
+        prop.sync_status().clone()
+    }
+
+    #[cfg(feature = "local_calendar_mocks_remote_calendars")]
+    fn set_property_maybe_mocked(&mut self, prop: Property) -> KFResult<SyncStatus> {
+        if self.mock_behaviour.is_some() {
+            self.mock_behaviour
+                .as_ref()
+                .map_or(Ok(()), |b| b.lock().unwrap().can_set_property())?;
+            Ok(self.set_property_force_synced(prop))
+        } else {
+            Ok(self.regular_set_property(prop))
+        }
+    }
+
     /// Add or update an item, but force a "synced" SyncStatus. This is the normal behaviour that would happen on a server
     #[cfg(feature = "local_calendar_mocks_remote_calendars")]
     fn add_or_update_item_force_synced(&mut self, mut item: Item) -> SyncStatus {
@@ -107,6 +133,17 @@ impl CachedCalendar {
         let ss_clone = item.sync_status().clone();
         self.items.insert(item.url().clone(), item);
         ss_clone
+    }
+
+    #[cfg(feature = "local_calendar_mocks_remote_calendars")]
+    fn set_property_force_synced(&mut self, mut prop: Property) -> SyncStatus {
+        log::debug!("Adding or updating a prop, but forces a synced SyncStatus");
+        match prop.sync_status() {
+            SyncStatus::Synced(_) => (),
+            _ => prop.set_sync_status(SyncStatus::random_synced()),
+        };
+
+        self.regular_set_property(prop)
     }
 
     /// Some kind of equality check
@@ -233,6 +270,14 @@ impl CachedCalendar {
         return self.update_item_maybe_mocked(item);
     }
 
+    fn set_property_sync(&mut self, prop: Property) -> KFResult<SyncStatus> {
+        #[cfg(not(feature = "local_calendar_mocks_remote_calendars"))]
+        return Ok(self.regular_set_property(prop));
+
+        #[cfg(feature = "local_calendar_mocks_remote_calendars")]
+        return self.set_property_maybe_mocked(prop);
+    }
+
     pub fn mark_for_deletion_sync(&mut self) {
         self.deleted = true;
     }
@@ -304,17 +349,8 @@ impl BaseCalendar for CachedCalendar {
         self.color.as_ref()
     }
 
-    async fn set_property(&mut self, prop: Property) -> KFResult<()> {
-        if let Some(p) = self.properties.get_mut(prop.nsn()) {
-            //NOTE Should be okay since the key remains the same, thus the hash remains the same
-            *p = prop.clone();
-        } else {
-            self.properties.insert(prop.nsn().clone(), prop.clone());
-        }
-
-        debug_assert_eq!(self.properties.get(prop.nsn()), Some(&prop));
-
-        Ok(())
+    async fn set_property(&mut self, prop: Property) -> KFResult<SyncStatus> {
+        self.set_property_sync(prop)
     }
 
     async fn get_properties_by_name(

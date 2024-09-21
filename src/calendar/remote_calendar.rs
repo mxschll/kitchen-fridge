@@ -136,7 +136,7 @@ impl BaseCalendar for RemoteCalendar {
         })
     }
 
-    async fn set_property(&mut self, prop: Property) -> KFResult<()> {
+    async fn set_property(&mut self, prop: Property) -> KFResult<SyncStatus> {
         let method: Method = "PROPPATCH".parse().expect("invalid method name");
         let url = self.url().clone();
 
@@ -176,7 +176,7 @@ impl BaseCalendar for RemoteCalendar {
             });
         }
 
-        Ok(())
+        Ok(SyncStatus::Synced(VersionTag::from(prop.value().clone())))
     }
 
     async fn add_item(&mut self, item: Item) -> KFResult<SyncStatus> {

@@ -1397,14 +1397,8 @@ where
         PropChange::Set(s) => {
             let cal = source.get_calendar(&s.calendar).await.unwrap();
 
-            //TODO Is this going to have the right sync status?
-            let prop = {
-                let mut p = Property::new(s.nsn.xmlns.clone(), s.nsn.name.clone(), s.value.clone());
+            let prop = Property::new(s.nsn.xmlns.clone(), s.nsn.name.clone(), s.value.clone());
 
-                p.set_sync_status(SyncStatus::Synced(VersionTag::from(s.value.clone())));
-
-                p
-            };
             log::debug!("Creating test prop {:?}\n", prop);
             cal.lock().unwrap().set_property(prop).await.unwrap();
             s.calendar.clone()

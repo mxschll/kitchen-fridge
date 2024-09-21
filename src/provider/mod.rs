@@ -93,8 +93,9 @@ impl std::fmt::Debug for PropChanges {
 
 /// A data source that combines two `CalDavSource`s, which is able to sync both sources.
 ///
-/// Usually, you will only need to use a provider between a server and a local cache, that is to say a [`CalDavProvider`](crate::CalDavProvider), i.e. a `Provider<Cache, CachedCalendar, Client, RemoteCalendar>`. \
-/// However, providers can be used for integration tests, where the remote source is mocked by a `Cache`.
+/// Usually, you will only need to use a provider between a server and a local cache, that is to say a [`CalDavProvider`](crate::CalDavProvider),
+/// i.e. a `Provider<Cache, CachedCalendar, Client, RemoteCalendar>`. However, providers can be used for integration tests, where the remote
+/// source is mocked by a `Cache`.
 #[derive(Debug)]
 pub struct Provider<L, T, R, U>
 where
@@ -842,9 +843,9 @@ where
                             "Unable to add prop {} to remote calendar: {}",
                             prop_add, err
                         )),
-                        Ok(_) => {
+                        Ok(ss) => {
                             // Update local sync status
-                            local_prop.mark_synced();
+                            local_prop.set_sync_status(ss);
                         }
                     }
                 }
@@ -868,22 +869,12 @@ where
                     continue;
                 }
                 Some(local_prop) => {
-                    // Update local sync status
-                    // We do this before set_property so the remote is also marked as being in sync
-                    log::debug!("Marking local prop as synced: {}", local_prop,);
-                    local_prop.mark_synced();
-                    log::debug!("Marked local prop as synced: {}", local_prop,);
-
-                    debug_assert_eq!(
-                        local_prop.sync_status(),
-                        &SyncStatus::Synced(local_prop.value().clone().into())
-                    );
                     match cal_remote.set_property(local_prop.clone()).await {
                         Err(err) => progress.error(&format!(
                             "Unable to update prop {} in remote calendar: {}",
                             prop_change, err
                         )),
-                        Ok(_) => {
+                        Ok(ss) => {
                             debug_assert_eq!(
                                 cal_remote
                                     .get_property(local_prop.nsn())
@@ -892,6 +883,9 @@ where
                                     .unwrap(),
                                 *local_prop
                             );
+
+                            // Update local sync status
+                            local_prop.set_sync_status(ss);
                         }
                     };
                 }
@@ -1079,6 +1073,7 @@ where
                     cal_local.update_property(new_prop.clone()).await
                 }
             };
+
             if let Err(err) = local_update_result {
                 progress.error(&format!(
                     "Not able to add property {} to local calendar: {}",

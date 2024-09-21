@@ -31,6 +31,7 @@ pub struct MockBehaviour {
     pub get_item_version_tags_behaviour: (u32, u32),
     pub get_item_by_url_behaviour: (u32, u32),
     pub delete_item_behaviour: (u32, u32),
+    pub set_property_behaviour: (u32, u32),
     pub get_properties_behaviour: (u32, u32),
     pub get_property_behaviour: (u32, u32),
     pub delete_property_behaviour: (u32, u32),
@@ -53,6 +54,7 @@ impl MockBehaviour {
             get_item_version_tags_behaviour: (0, n_fails),
             get_item_by_url_behaviour: (0, n_fails),
             delete_item_behaviour: (0, n_fails),
+            set_property_behaviour: (0, n_fails),
             get_properties_behaviour: (0, n_fails),
             get_property_behaviour: (0, n_fails),
             delete_property_behaviour: (0, n_fails),
@@ -121,6 +123,12 @@ impl MockBehaviour {
             return Ok(());
         }
         decrement(&mut self.delete_item_behaviour, "delete_item")
+    }
+    pub fn can_set_property(&mut self) -> MockResult<()> {
+        if self.is_suspended {
+            return Ok(());
+        }
+        decrement(&mut self.set_property_behaviour, "set_property")
     }
     pub fn can_get_properties(&mut self) -> MockResult<()> {
         if self.is_suspended {

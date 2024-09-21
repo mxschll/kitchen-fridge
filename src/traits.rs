@@ -75,7 +75,9 @@ pub trait BaseCalendar {
     ) -> KFResult<Vec<Option<Property>>>;
 
     /// Sets the property with namespace and name prop.nsn() to have value prop.value
-    async fn set_property(&mut self, prop: Property) -> KFResult<()>;
+    /// For local calendars, the sync status is not modified.
+    /// For remote calendars, the sync status is updated by the server (to Synced)
+    async fn set_property(&mut self, prop: Property) -> KFResult<SyncStatus>;
 
     /// Returns whether this calDAV calendar supports to-do items
     fn supports_todo(&self) -> bool {
