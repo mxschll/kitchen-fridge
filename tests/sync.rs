@@ -112,7 +112,7 @@ impl TestFlavour {
     pub fn normal_with_errors1() -> Self {
         Self {
             item_scenarii: scenarii::item_scenarii_basic(),
-            prop_scenarii: scenarii::prop_scenarii_basic(), //FIXME
+            prop_scenarii: scenarii::prop_scenarii_basic(),
             mock_behaviour: Arc::new(Mutex::new(MockBehaviour::fail_now(10))),
         }
     }
@@ -120,7 +120,7 @@ impl TestFlavour {
     pub fn normal_with_errors2() -> Self {
         Self {
             item_scenarii: scenarii::item_scenarii_basic(),
-            prop_scenarii: scenarii::prop_scenarii_basic(), //FIXME
+            prop_scenarii: scenarii::prop_scenarii_basic(),
             mock_behaviour: Arc::new(Mutex::new(MockBehaviour {
                 get_calendars_behaviour: (0, 1),
                 create_calendar_behaviour: (2, 2),
@@ -132,7 +132,7 @@ impl TestFlavour {
     pub fn normal_with_errors3() -> Self {
         Self {
             item_scenarii: scenarii::item_scenarii_first_sync_to_server(),
-            prop_scenarii: scenarii::prop_scenarii_basic(), //FIXME
+            prop_scenarii: scenarii::prop_scenarii_first_sync_to_server(),
             mock_behaviour: Arc::new(Mutex::new(MockBehaviour {
                 get_calendars_behaviour: (1, 6),
                 create_calendar_behaviour: (0, 1),
@@ -144,7 +144,7 @@ impl TestFlavour {
     pub fn normal_with_errors4() -> Self {
         Self {
             item_scenarii: scenarii::item_scenarii_first_sync_to_server(),
-            prop_scenarii: scenarii::prop_scenarii_basic(), //FIXME
+            prop_scenarii: scenarii::prop_scenarii_first_sync_to_server(),
             mock_behaviour: Arc::new(Mutex::new(MockBehaviour {
                 add_item_behaviour: (1, 3),
                 ..MockBehaviour::default()
@@ -155,7 +155,7 @@ impl TestFlavour {
     pub fn normal_with_errors5() -> Self {
         Self {
             item_scenarii: scenarii::item_scenarii_basic(),
-            prop_scenarii: scenarii::prop_scenarii_basic(), //FIXME
+            prop_scenarii: scenarii::prop_scenarii_basic(),
             mock_behaviour: Arc::new(Mutex::new(MockBehaviour {
                 get_item_version_tags_behaviour: (0, 1),
                 ..MockBehaviour::default()
@@ -166,7 +166,7 @@ impl TestFlavour {
     pub fn normal_with_errors6() -> Self {
         Self {
             item_scenarii: scenarii::item_scenarii_basic(),
-            prop_scenarii: scenarii::prop_scenarii_basic(), //FIXME
+            prop_scenarii: scenarii::prop_scenarii_basic(),
             mock_behaviour: Arc::new(Mutex::new(MockBehaviour {
                 get_item_by_url_behaviour: (3, 2),
                 ..MockBehaviour::default()
@@ -177,7 +177,7 @@ impl TestFlavour {
     pub fn normal_with_errors7() -> Self {
         Self {
             item_scenarii: scenarii::item_scenarii_basic(),
-            prop_scenarii: scenarii::prop_scenarii_basic(), //FIXME
+            prop_scenarii: scenarii::prop_scenarii_basic(),
             mock_behaviour: Arc::new(Mutex::new(MockBehaviour {
                 delete_item_behaviour: (0, 2),
                 ..MockBehaviour::default()
@@ -188,7 +188,7 @@ impl TestFlavour {
     pub fn normal_with_errors8() -> Self {
         Self {
             item_scenarii: scenarii::item_scenarii_basic(),
-            prop_scenarii: scenarii::prop_scenarii_basic(), //FIXME
+            prop_scenarii: scenarii::prop_scenarii_basic(),
             mock_behaviour: Arc::new(Mutex::new(MockBehaviour {
                 add_item_behaviour: (2, 3),
                 get_item_by_url_behaviour: (1, 12),
@@ -200,7 +200,7 @@ impl TestFlavour {
     pub fn normal_with_errors9() -> Self {
         Self {
             item_scenarii: scenarii::item_scenarii_basic(),
-            prop_scenarii: scenarii::prop_scenarii_basic(), //FIXME
+            prop_scenarii: scenarii::prop_scenarii_basic(),
             mock_behaviour: Arc::new(Mutex::new(MockBehaviour {
                 get_calendars_behaviour: (0, 8),
                 delete_item_behaviour: (1, 1),
@@ -212,7 +212,7 @@ impl TestFlavour {
     pub fn normal_with_errors10() -> Self {
         Self {
             item_scenarii: scenarii::item_scenarii_first_sync_to_server(),
-            prop_scenarii: scenarii::prop_scenarii_basic(), //FIXME
+            prop_scenarii: scenarii::prop_scenarii_first_sync_to_server(),
             mock_behaviour: Arc::new(Mutex::new(MockBehaviour {
                 get_calendars_behaviour: (0, 8),
                 delete_item_behaviour: (1, 1),
@@ -226,7 +226,7 @@ impl TestFlavour {
     pub fn normal_with_errors11() -> Self {
         Self {
             item_scenarii: scenarii::item_scenarii_basic(),
-            prop_scenarii: scenarii::prop_scenarii_basic(), //FIXME
+            prop_scenarii: scenarii::prop_scenarii_basic(),
             mock_behaviour: Arc::new(Mutex::new(MockBehaviour {
                 get_calendars_behaviour: (0, 8),
                 delete_item_behaviour: (1, 1),
@@ -241,7 +241,7 @@ impl TestFlavour {
     pub fn normal_with_errors12() -> Self {
         Self {
             item_scenarii: scenarii::item_scenarii_basic(),
-            prop_scenarii: scenarii::prop_scenarii_basic(), //FIXME
+            prop_scenarii: scenarii::prop_scenarii_basic(),
             mock_behaviour: Arc::new(Mutex::new(MockBehaviour {
                 update_item_behaviour: (0, 3),
                 ..MockBehaviour::default()

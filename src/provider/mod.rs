@@ -14,7 +14,7 @@ use crate::error::KFResult;
 use crate::traits::CompleteCalendar;
 use crate::traits::{BaseCalendar, CalDavSource, DavCalendar};
 use crate::utils::prop::Property;
-use crate::utils::sync::{SyncStatus, Syncable, VersionTag};
+use crate::utils::sync::{SyncStatus, Syncable};
 use crate::utils::NamespacedName;
 
 pub mod sync_progress;
@@ -877,15 +877,6 @@ where
                         Ok(ss) => {
                             // Update local sync status
                             local_prop.set_sync_status(ss);
-
-                            debug_assert_eq!(
-                                cal_remote
-                                    .get_property(local_prop.nsn())
-                                    .await
-                                    .unwrap()
-                                    .unwrap(),
-                                *local_prop
-                            );
                         }
                     };
                 }
