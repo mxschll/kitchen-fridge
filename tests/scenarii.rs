@@ -728,6 +728,58 @@ pub fn item_scenarii_transient_task() -> Vec<ItemScenario> {
     tasks
 }
 
+/// This scenario tests a task added and deleted before a sync happens
+pub fn prop_scenarii_transient_prop() -> Vec<PropScenario> {
+    let mut tasks = Vec::new();
+
+    let cal: Url = "https://some.calend.ar/transient_prop/".parse().unwrap();
+
+    {
+        let nsn = random_nsn();
+        tasks.push(PropScenario {
+            nsn: nsn.clone(),
+            initial_state: LocatedState::Local(PropState {
+                calendar: cal.clone(),
+                nsn: nsn.clone(),
+                value: String::from("A prop, so that the calendar actually exists"),
+            }),
+            local_changes_to_apply: Vec::new(),
+            remote_changes_to_apply: Vec::new(),
+            after_sync: LocatedState::BothSynced(PropState {
+                calendar: cal.clone(),
+                nsn: nsn.clone(),
+                value: String::from("A prop, so that the calendar actually exists"),
+            }),
+        });
+    }
+
+    {
+        let nsn = random_nsn();
+
+        tasks.push(PropScenario {
+            nsn: nsn.clone(),
+            initial_state: LocatedState::None,
+            local_changes_to_apply: vec![
+                PropChange::Set(PropState {
+                    calendar: cal.clone(),
+                    nsn: nsn.clone(),
+                    value: String::from("A transient task that will be deleted before the sync"),
+                }),
+                PropChange::Set(PropState {
+                    calendar: cal.clone(),
+                    nsn: nsn.clone(),
+                    value: String::from("A new name"),
+                }),
+                PropChange::Remove,
+            ],
+            remote_changes_to_apply: Vec::new(),
+            after_sync: LocatedState::None,
+        });
+    }
+
+    tasks
+}
+
 /// Generate the scenarii required for the following test:
 /// At last sync, we had three calendars with the following properties:
 ///  1: A, B, C, D, E, F

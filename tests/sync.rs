@@ -101,10 +101,10 @@ impl TestFlavour {
         }
     }
 
-    pub fn transient_task() -> Self {
+    pub fn transient() -> Self {
         Self {
             item_scenarii: scenarii::item_scenarii_transient_task(),
-            prop_scenarii: scenarii::prop_scenarii_basic(), //FIXME
+            prop_scenarii: scenarii::prop_scenarii_transient_prop(),
             mock_behaviour: Arc::new(Mutex::new(MockBehaviour::new())),
         }
     }
@@ -355,8 +355,8 @@ async fn test_sync_empty_initial_server() {
 
 #[tokio::test]
 #[cfg_attr(not(feature = "integration_tests"), ignore)]
-async fn test_sync_transient_task() {
-    run_flavour(TestFlavour::transient_task(), 1).await;
+async fn test_sync_transient() {
+    run_flavour(TestFlavour::transient(), 1).await;
 }
 
 #[tokio::test]
