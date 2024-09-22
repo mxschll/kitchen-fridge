@@ -96,7 +96,7 @@ impl TestFlavour {
     pub fn first_sync_to_server() -> Self {
         Self {
             item_scenarii: scenarii::item_scenarii_first_sync_to_server(),
-            prop_scenarii: scenarii::prop_scenarii_basic(), //FIXME
+            prop_scenarii: scenarii::prop_scenarii_first_sync_to_server(),
             mock_behaviour: Arc::new(Mutex::new(MockBehaviour::new())),
         }
     }

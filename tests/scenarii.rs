@@ -608,6 +608,73 @@ pub fn item_scenarii_first_sync_to_server() -> Vec<ItemScenario> {
     tasks
 }
 
+/// This scenario basically checks a first sync to an empty server
+pub fn prop_scenarii_first_sync_to_server() -> Vec<PropScenario> {
+    let mut tasks = Vec::new();
+
+    let cal3: Url = "https://some.calend.ar/third/".parse().unwrap();
+    let cal4: Url = "https://some.calend.ar/fourth/".parse().unwrap();
+
+    {
+        let nsn = random_nsn();
+        tasks.push(PropScenario {
+            nsn: nsn.clone(),
+            initial_state: LocatedState::Local(PropState {
+                calendar: cal3.clone(),
+                nsn: nsn.clone(),
+                value: String::from("Value A3"),
+            }),
+            local_changes_to_apply: Vec::new(),
+            remote_changes_to_apply: Vec::new(),
+            after_sync: LocatedState::BothSynced(PropState {
+                calendar: cal3.clone(),
+                nsn: nsn.clone(),
+                value: String::from("Value A3"),
+            }),
+        });
+    }
+
+    {
+        let nsn = random_nsn();
+        tasks.push(PropScenario {
+            nsn: nsn.clone(),
+            initial_state: LocatedState::Local(PropState {
+                calendar: cal4.clone(),
+                nsn: nsn.clone(),
+                value: String::from("Value A4"),
+            }),
+            local_changes_to_apply: Vec::new(),
+            remote_changes_to_apply: Vec::new(),
+            after_sync: LocatedState::BothSynced(PropState {
+                calendar: cal4.clone(),
+                nsn: nsn.clone(),
+                value: String::from("Value A4"),
+            }),
+        });
+    }
+
+    {
+        let nsn = random_nsn();
+        tasks.push(PropScenario {
+            nsn: nsn.clone(),
+            initial_state: LocatedState::Local(PropState {
+                calendar: cal3.clone(),
+                nsn: nsn.clone(),
+                value: String::from("Value B3"),
+            }),
+            local_changes_to_apply: Vec::new(),
+            remote_changes_to_apply: Vec::new(),
+            after_sync: LocatedState::BothSynced(PropState {
+                calendar: cal3.clone(),
+                nsn: nsn.clone(),
+                value: String::from("Value B3"),
+            }),
+        });
+    }
+
+    tasks
+}
+
 /// This scenario tests a task added and deleted before a sync happens
 pub fn item_scenarii_transient_task() -> Vec<ItemScenario> {
     let mut tasks = Vec::new();
