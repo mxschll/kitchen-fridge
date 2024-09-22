@@ -219,4 +219,8 @@ impl Namespaces {
     pub(crate) fn sym(&self, ns: &String) -> Option<char> {
         self.mapping.get(ns).cloned()
     }
+
+    pub(crate) fn dav_sym(&self) -> char {
+        self.mapping[&"DAV:".to_string()]
+    }
 }

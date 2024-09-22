@@ -124,15 +124,21 @@ pub(crate) fn propfind_body(props: &[NamespacedName]) -> String {
         s
     };
 
+    let d = namespaces.dav_sym();
+
     format!(
         r#"
-<d:propfind{}>
-    <d:prop>
+<{}:propfind{}>
+    <{}:prop>
 {}
-    </d:prop>
-</d:propfind>
+    </{}:prop>
+</{}:propfind>
 "#,
+        d,
         namespaces.decl(),
-        prop_names
+        d,
+        prop_names,
+        d,
+        d,
     )
 }
