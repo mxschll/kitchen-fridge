@@ -3,6 +3,7 @@ use std::collections::{HashMap, HashSet};
 use async_trait::async_trait;
 use csscolorparser::Color;
 use serde::{Deserialize, Serialize};
+use serde_json_any_key::any_key_map;
 use url::Url;
 
 use crate::calendar::SupportedComponents;
@@ -51,6 +52,7 @@ pub struct CachedCalendar {
     mock_behaviour: Option<Arc<Mutex<MockBehaviour>>>,
 
     /// CalDAV calendar properties
+    #[serde(with = "any_key_map")]
     properties: HashMap<NamespacedName, Property>,
 
     items: HashMap<Url, Item>,
