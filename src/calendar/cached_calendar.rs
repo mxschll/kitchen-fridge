@@ -335,6 +335,17 @@ impl CachedCalendar {
     pub fn set_name<S: ToString>(&mut self, name: S) {
         self.name = name.to_string();
     }
+
+    pub fn get_property_by_name_sync(&self, name: &NamespacedName) -> Option<&Property> {
+        self.properties.get(name)
+    }
+
+    pub fn get_property_by_name_mut_sync(
+        &mut self,
+        name: &NamespacedName,
+    ) -> Option<&mut Property> {
+        self.properties.get_mut(name)
+    }
 }
 
 #[async_trait]
@@ -424,11 +435,11 @@ impl CompleteCalendar for CachedCalendar {
     }
 
     async fn get_property_by_name(&self, name: &NamespacedName) -> Option<&Property> {
-        self.properties.get(name)
+        self.get_property_by_name_sync(name)
     }
 
     async fn get_property_by_name_mut(&mut self, name: &NamespacedName) -> Option<&mut Property> {
-        self.properties.get_mut(name)
+        self.get_property_by_name_mut_sync(name)
     }
 
     async fn add_property(&mut self, prop: Property) -> KFResult<()> {
