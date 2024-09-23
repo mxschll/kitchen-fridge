@@ -43,6 +43,14 @@ impl Property {
         }
     }
 
+    pub fn new_from_nsn<S: ToString>(nsn: NamespacedName, value: S) -> Self {
+        Self {
+            nsn,
+            value: value.to_string(),
+            sync_status: SyncStatus::default(),
+        }
+    }
+
     pub fn nsn(&self) -> &NamespacedName {
         &self.nsn
     }

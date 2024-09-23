@@ -128,7 +128,7 @@ pub struct NamespacedName {
     pub name: String,
 }
 impl NamespacedName {
-    pub(crate) fn new<S1: ToString, S2: ToString>(xmlns: S1, name: S2) -> Self {
+    pub fn new<S1: ToString, S2: ToString>(xmlns: S1, name: S2) -> Self {
         Self {
             xmlns: xmlns.to_string(),
             name: name.to_string(),
@@ -137,7 +137,7 @@ impl NamespacedName {
 
     /// Uses namespace mappings to simplify the representation of this name
     /// For example, https://example.com/api/item becomes b:item if namespace https://example.com/api/ has symbol b in the namespace mapping
-    pub(crate) fn with_symbolized_prefix(&self, namespaces: &Namespaces) -> String {
+    pub fn with_symbolized_prefix(&self, namespaces: &Namespaces) -> String {
         let sym = namespaces.sym(&self.xmlns).unwrap();
         format!("{}:{}", sym, self.name)
     }
@@ -172,13 +172,13 @@ impl Ord for NamespacedName {
 /// Utility to track XML namespace symbol mappings, as used in xmlns attribute declarations
 ///
 /// Includes a default mapping of xmlns:d="DAV:"
-pub(crate) struct Namespaces {
+pub struct Namespaces {
     available_syms: VecDeque<char>,
     mapping: HashMap<String, char>,
 }
 
 impl Namespaces {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         let mut mapping = HashMap::new();
         mapping.insert("DAV:".into(), 'd');
 
@@ -191,7 +191,7 @@ impl Namespaces {
     }
 
     /// Maps the namespace to an unassigned symbol and returns it
-    pub(crate) fn add<S: ToString>(&mut self, ns: S) -> char {
+    pub fn add<S: ToString>(&mut self, ns: S) -> char {
         let sym = self
             .available_syms
             .pop_back()
@@ -202,7 +202,7 @@ impl Namespaces {
         sym
     }
 
-    pub(crate) fn decl(&self) -> String {
+    pub fn decl(&self) -> String {
         let mut s = String::new();
         for (k, v) in &self.mapping {
             s.push(' ');
@@ -216,11 +216,11 @@ impl Namespaces {
         s
     }
 
-    pub(crate) fn sym(&self, ns: &String) -> Option<char> {
+    pub fn sym(&self, ns: &String) -> Option<char> {
         self.mapping.get(ns).cloned()
     }
 
-    pub(crate) fn dav_sym(&self) -> char {
+    pub fn dav_sym(&self) -> char {
         self.mapping[&"DAV:".to_string()]
     }
 }
