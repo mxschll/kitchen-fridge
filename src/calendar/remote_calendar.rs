@@ -82,8 +82,7 @@ pub struct RemoteCalendar {
 
 impl RemoteCalendar {
     async fn get_all_properties(&self) -> KFResult<Vec<Property>> {
-        let all_props = vec![PROP_ALLPROP.clone()];
-        self.get_properties(&all_props[..]).await
+        self.get_properties(&[PROP_ALLPROP.clone()]).await
     }
 
     async fn get_properties(&self, props: &[NamespacedName]) -> KFResult<Vec<Property>> {
