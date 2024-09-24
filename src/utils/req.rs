@@ -101,7 +101,7 @@ pub(crate) async fn sub_request_and_extract_elems(
 ///
 /// This will look something like:
 ///
-/// <d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav" >
+/// <d:propfind xmlns:d="DAV:">
 ///     <d:prop>
 ///         <d:allprop/>
 ///     </d:prop>
