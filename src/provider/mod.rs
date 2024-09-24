@@ -275,9 +275,13 @@ where
         cal_remote: Arc<Mutex<U>>,
         progress: &mut SyncProgress,
     ) -> KFResult<()> {
+        log::debug!("Getting remote lock");
         let mut cal_remote = cal_remote.lock().unwrap();
+        log::debug!("Getting local lock");
         let mut cal_local = cal_local.lock().unwrap();
         let cal_name = cal_local.name().to_string();
+
+        log::debug!("Syncing {}", cal_name);
 
         progress.info(&format!("Syncing calendar {}", cal_name));
         progress.reset_counter();
