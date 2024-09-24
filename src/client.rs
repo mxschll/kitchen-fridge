@@ -122,13 +122,13 @@ impl Client {
     /// represent them.
     async fn populate_calendars(&self) -> KFResult<()> {
         let cal_home_set = self.get_cal_home_set().await?;
-        let props = vec![
+        let props = &[
             PROP_CALENDAR_COLOR.clone(),
             PROP_DISPLAY_NAME.clone(),
             PROP_RESOURCE_TYPE.clone(),
             PROP_SUPPORTED_CALENDAR_COMPONENT_SET.clone(),
         ];
-        let body = propfind_body(&props[..]);
+        let body = propfind_body(props);
 
         let responses =
             sub_request_and_extract_elems(&cal_home_set, "PROPFIND", body, 1, "response").await?;
