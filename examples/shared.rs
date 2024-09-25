@@ -45,7 +45,7 @@ pub async fn initial_sync(cache_folder: &str) -> CalDavProvider {
     if !(provider.sync().await) {
         log::warn!("Sync did not complete, see the previous log lines for more info. You can safely start a new sync.");
     }
-    provider.local().save_to_folder().unwrap();
+    provider.local().save_to_folder().await.unwrap();
 
     println!("---- Local items, after sync -----");
     let cals = provider.local().get_calendars().await.unwrap();

@@ -40,8 +40,8 @@ async fn main() {
 async fn toggle_all_tasks_and_sync_again(provider: &mut CalDavProvider) -> KFResult<()> {
     let mut n_toggled = 0;
 
-    for (_url, cal) in provider.local().get_calendars_sync()?.iter() {
-        for (_url, item) in cal.lock().unwrap().get_items_mut_sync().iter_mut() {
+    for (_url, cal) in provider.local().get_calendars_sync().await?.iter() {
+        for (_url, item) in cal.lock().await.get_items_mut_sync().iter_mut() {
             match item {
                 Item::Task(task) => {
                     match task.completed() {

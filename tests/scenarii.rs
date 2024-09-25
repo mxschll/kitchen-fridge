@@ -1076,7 +1076,7 @@ async fn populate_test_provider(
                     .await
                     .unwrap()
                     .lock()
-                    .unwrap()
+                    .await
                     .add_item(new_item)
                     .await
                     .unwrap();
@@ -1086,7 +1086,7 @@ async fn populate_test_provider(
                     .await
                     .unwrap()
                     .lock()
-                    .unwrap()
+                    .await
                     .add_item(new_item)
                     .await
                     .unwrap();
@@ -1096,7 +1096,7 @@ async fn populate_test_provider(
                     .await
                     .unwrap()
                     .lock()
-                    .unwrap()
+                    .await
                     .add_item(new_item.clone())
                     .await
                     .unwrap();
@@ -1104,7 +1104,7 @@ async fn populate_test_provider(
                     .await
                     .unwrap()
                     .lock()
-                    .unwrap()
+                    .await
                     .add_item(new_item)
                     .await
                     .unwrap();
@@ -1157,7 +1157,7 @@ async fn populate_test_provider(
                     .await
                     .unwrap()
                     .lock()
-                    .unwrap()
+                    .await
                     .set_property(new_prop.clone())
                     .await
                     .unwrap();
@@ -1166,7 +1166,7 @@ async fn populate_test_provider(
                         .await
                         .unwrap()
                         .lock()
-                        .unwrap()
+                        .await
                         .get_property_by_name(new_prop.nsn())
                         .await,
                     Some(&new_prop)
@@ -1178,7 +1178,7 @@ async fn populate_test_provider(
                     .await
                     .unwrap()
                     .lock()
-                    .unwrap()
+                    .await
                     .set_property(new_prop.clone())
                     .await
                     .unwrap();
@@ -1187,7 +1187,7 @@ async fn populate_test_provider(
                         .await
                         .unwrap()
                         .lock()
-                        .unwrap()
+                        .await
                         .get_property_by_name(new_prop.nsn())
                         .await,
                     Some(&new_prop)
@@ -1199,7 +1199,7 @@ async fn populate_test_provider(
                     .await
                     .unwrap()
                     .lock()
-                    .unwrap()
+                    .await
                     .set_property(new_prop.clone())
                     .await
                     .unwrap();
@@ -1207,7 +1207,7 @@ async fn populate_test_provider(
                     .await
                     .unwrap()
                     .lock()
-                    .unwrap()
+                    .await
                     .set_property(new_prop.clone())
                     .await
                     .unwrap();
@@ -1217,7 +1217,7 @@ async fn populate_test_provider(
                         .await
                         .unwrap()
                         .lock()
-                        .unwrap()
+                        .await
                         .get_property_by_name(new_prop.nsn())
                         .await,
                     Some(&new_prop)
@@ -1227,7 +1227,7 @@ async fn populate_test_provider(
                         .await
                         .unwrap()
                         .lock()
-                        .unwrap()
+                        .await
                         .get_property_by_name(new_prop.nsn())
                         .await,
                     Some(&new_prop)
@@ -1300,7 +1300,7 @@ async fn apply_changes_on_provider(
 
                 if let Some(calendar_url) = calendar_url.as_ref() {
                     let cal = provider.local().get_calendar(calendar_url).await.unwrap();
-                    let cal = cal.lock().unwrap();
+                    let cal = cal.lock().await;
 
                     assert!(cal.get_property_by_name(&prop.nsn).await.is_some());
                 }
@@ -1410,7 +1410,7 @@ async fn apply_changes_on_an_existing_item<S, C>(
     C: CompleteCalendar + DavCalendar, // in this test, we're using a calendar that mocks both kinds
 {
     let cal = source.get_calendar(calendar_url).await.unwrap();
-    let mut cal = cal.lock().unwrap();
+    let mut cal = cal.lock().await;
     let task = cal
         .get_item_by_url_mut(item_url)
         .await
@@ -1459,7 +1459,7 @@ async fn apply_changes_on_an_existing_prop<S, C>(
     C: CompleteCalendar + DavCalendar, // in this test, we're using a calendar that mocks both kinds
 {
     let cal = source.get_calendar(calendar_url).await.unwrap();
-    let mut cal = cal.lock().unwrap();
+    let mut cal = cal.lock().await;
     let prop = cal.get_property_by_name_mut(nsn).await.unwrap_or_else(|| {
         panic!(
             "Couldn't get supposedly-existing property {} while applying change {:?}",
@@ -1498,7 +1498,7 @@ where
         }
         ItemChange::Create(calendar_url, item) => {
             let cal = source.get_calendar(calendar_url).await.unwrap();
-            cal.lock().unwrap().add_item(item.clone()).await.unwrap();
+            cal.lock().await.add_item(item.clone()).await.unwrap();
             calendar_url.clone()
         }
     }
@@ -1520,7 +1520,7 @@ where
             let prop = Property::new(s.nsn.xmlns.clone(), s.nsn.name.clone(), s.value.clone());
 
             log::debug!("Creating test prop {:?}\n", prop);
-            cal.lock().unwrap().set_property(prop).await.unwrap();
+            cal.lock().await.set_property(prop).await.unwrap();
             s.calendar.clone()
         }
     }

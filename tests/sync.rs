@@ -30,7 +30,7 @@ impl TestFlavour {
     pub fn first_sync_to_server() -> Self {
         Self {}
     }
-    pub fn transient_task() -> Self {
+    pub fn transient() -> Self {
         Self {}
     }
     pub fn normal_with_errors1() -> Self {
@@ -250,7 +250,7 @@ impl TestFlavour {
     }
 
     pub async fn run(&self, max_attempts: u32) {
-        self.mock_behaviour.lock().unwrap().suspend();
+        self.mock_behaviour.lock().await.suspend();
 
         let mut provider = scenarii::populate_test_provider_before_sync(
             &self.item_scenarii,
@@ -260,7 +260,7 @@ impl TestFlavour {
         .await;
         print_provider(&provider, "before sync").await;
 
-        self.mock_behaviour.lock().unwrap().resume();
+        self.mock_behaviour.lock().await.resume();
         for attempt in 0..max_attempts {
             println!("\nSyncing...\n");
             if provider.sync().await {
@@ -268,7 +268,7 @@ impl TestFlavour {
                 break;
             }
         }
-        self.mock_behaviour.lock().unwrap().suspend();
+        self.mock_behaviour.lock().await.suspend();
 
         print_provider(&provider, "after sync").await;
 
@@ -436,6 +436,7 @@ use kitchen_fridge::{
     cache::Cache, calendar::cached_calendar::CachedCalendar, provider::Provider,
     traits::CalDavSource,
 };
+use tokio::sync::Mutex;
 
 /// Print the contents of the provider. This is usually used for debugging
 #[allow(dead_code)]

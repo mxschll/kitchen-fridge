@@ -25,7 +25,7 @@ use crate::mock_behaviour::MockBehaviour;
 #[cfg(feature = "local_calendar_mocks_remote_calendars")]
 use std::sync::Arc;
 
-#[cfg(feature = "local_calendar_mocks_remote_calendars")]
+#[cfg(any(test, feature = "local_calendar_mocks_remote_calendars"))]
 fn print_props(desc: &str, props: &HashMap<NamespacedName, Property>) {
     let ordered = {
         let mut p: Vec<(&NamespacedName, &Property)> = props.iter().collect();
