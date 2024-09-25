@@ -5,9 +5,10 @@
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Display, Formatter, Write};
 use std::marker::PhantomData;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use itertools::Itertools;
+use tokio::sync::Mutex;
 use url::Url;
 
 use crate::error::KFResult;
@@ -221,7 +222,7 @@ where
                 continue;
             }
 
-            if cal_local.lock().unwrap().marked_for_deletion().await {
+            if cal_local.lock().await.marked_for_deletion().await {
                 self.local_mut().delete_calendar(&cal_url).await?;
                 continue;
             }
@@ -275,8 +276,8 @@ where
         cal_remote: Arc<Mutex<U>>,
         progress: &mut SyncProgress,
     ) -> KFResult<()> {
-        let mut cal_remote = cal_remote.lock().unwrap();
-        let mut cal_local = cal_local.lock().unwrap();
+        let mut cal_remote = cal_remote.lock().await;
+        let mut cal_local = cal_local.lock().await;
         let cal_name = cal_local.name().to_string();
 
         progress.info(&format!("Syncing calendar {}", cal_name));
@@ -1110,7 +1111,7 @@ where
 
         // This calendar does not exist locally yet, let's add it
         log::debug!("Adding a {} calendar {}", haystack_descr, cal_url);
-        let src = needle.lock().unwrap();
+        let src = needle.lock().await;
         let name = src.name().to_string();
         let supported_comps = src.supported_components();
         let color = src.color();

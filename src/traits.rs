@@ -1,10 +1,11 @@
 //! Traits used by multiple structs in this crate
 
 use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use csscolorparser::Color;
+use tokio::sync::Mutex;
 use url::Url;
 
 use crate::calendar::SupportedComponents;

@@ -2,12 +2,13 @@
 
 use std::collections::HashMap;
 use std::convert::TryFrom;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use csscolorparser::Color;
 use reqwest::header::CONTENT_TYPE;
 use reqwest::{Method, StatusCode};
+use tokio::sync::Mutex;
 use url::Url;
 
 use crate::calendar::remote_calendar::RemoteCalendar;
@@ -79,7 +80,7 @@ impl Client {
 
     /// Return the Principal URL, or fetch it from server if not known yet
     async fn get_principal(&self) -> KFResult<Resource> {
-        if let Some(p) = &self.cached_replies.lock().unwrap().principal {
+        if let Some(p) = &self.cached_replies.lock().await.principal {
             return Ok(p.clone());
         }
 
@@ -91,7 +92,7 @@ impl Client {
         )
         .await?;
         let principal_url = self.resource.combine(&href);
-        self.cached_replies.lock().unwrap().principal = Some(principal_url.clone());
+        self.cached_replies.lock().await.principal = Some(principal_url.clone());
         log::debug!("Principal URL is {}", href);
 
         Ok(principal_url)
@@ -99,7 +100,7 @@ impl Client {
 
     /// Return the Homeset URL, or fetch it from server if not known yet
     pub async fn get_cal_home_set(&self) -> KFResult<Resource> {
-        if let Some(h) = &self.cached_replies.lock().unwrap().calendar_home_set {
+        if let Some(h) = &self.cached_replies.lock().await.calendar_home_set {
             return Ok(h.clone());
         }
         let principal_url = self.get_principal().await?;
@@ -112,7 +113,7 @@ impl Client {
         )
         .await?;
         let chs_url = self.resource.combine(&href);
-        self.cached_replies.lock().unwrap().calendar_home_set = Some(chs_url.clone());
+        self.cached_replies.lock().await.calendar_home_set = Some(chs_url.clone());
         log::debug!("Calendar home set URL is {:?}", href);
 
         Ok(chs_url)
@@ -222,7 +223,7 @@ impl Client {
             );
         }
 
-        let mut replies = self.cached_replies.lock().unwrap();
+        let mut replies = self.cached_replies.lock().await;
         replies.calendars = Some(calendars);
         Ok(())
     }
@@ -236,7 +237,7 @@ impl CalDavSource<RemoteCalendar> for Client {
         Ok(self
             .cached_replies
             .lock()
-            .unwrap()
+            .await
             .calendars
             .as_ref()
             .unwrap() // Unwrap OK because populate_calendars either does what it says, or returns Err
@@ -251,7 +252,7 @@ impl CalDavSource<RemoteCalendar> for Client {
 
         self.cached_replies
             .lock()
-            .unwrap()
+            .await
             .calendars
             .as_ref()
             .and_then(|cals| cals.get(url))
@@ -271,7 +272,7 @@ impl CalDavSource<RemoteCalendar> for Client {
         let cals = self
             .cached_replies
             .lock()
-            .unwrap()
+            .await
             .calendars
             .as_ref()
             .unwrap()
@@ -349,7 +350,7 @@ impl CalDavSource<RemoteCalendar> for Client {
             })?;
 
         // Now that we've removed the calendar from the server, evict it from the cached replies (if present)
-        let mut replies = self.cached_replies.lock().unwrap();
+        let mut replies = self.cached_replies.lock().await;
         let cals = replies.calendars.as_mut();
         Ok(cals.unwrap().remove(url))
     }

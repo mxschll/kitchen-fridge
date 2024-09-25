@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::sync::Mutex;
 
 use async_trait::async_trait;
 use csscolorparser::Color;
@@ -7,6 +6,7 @@ use http::header::ToStrError;
 use http::{HeaderValue, Method};
 use reqwest::header::HeaderMap;
 use reqwest::{header::CONTENT_LENGTH, header::CONTENT_TYPE};
+use tokio::sync::Mutex;
 use url::Url;
 
 use crate::calendar::SupportedComponents;
@@ -296,7 +296,7 @@ impl DavCalendar for RemoteCalendar {
     }
 
     async fn get_item_version_tags(&self) -> KFResult<HashMap<Url, VersionTag>> {
-        if let Some(map) = &*self.cached_version_tags.lock().unwrap() {
+        if let Some(map) = &*self.cached_version_tags.lock().await {
             log::debug!("Version tags are already cached.");
             return Ok(map.clone());
         };
@@ -334,7 +334,7 @@ impl DavCalendar for RemoteCalendar {
         }
 
         // Note: the mutex cannot be locked during this whole async function, but it can safely be re-entrant (this will just waste an unnecessary request)
-        *self.cached_version_tags.lock().unwrap() = Some(items.clone());
+        *self.cached_version_tags.lock().await = Some(items.clone());
         Ok(items)
     }
 

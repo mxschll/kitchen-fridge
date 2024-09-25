@@ -4,11 +4,12 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt::{self};
 use std::hash::Hash;
 use std::io::{stdin, stdout, Read, Write};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use prop::{print_property, Property};
 use serde::{Deserialize, Serialize};
 use sync::Syncable;
+use tokio::sync::Mutex;
 use url::Url;
 
 use crate::traits::CompleteCalendar;
@@ -32,8 +33,8 @@ where
     };
 
     for (url, cal) in ordered {
-        println!("CAL {} ({})", cal.lock().unwrap().name(), url);
-        match cal.lock().unwrap().get_items().await {
+        println!("CAL {} ({})", cal.lock().await.name(), url);
+        match cal.lock().await.get_items().await {
             Err(_err) => continue,
             Ok(map) => {
                 for (_, item) in map {
@@ -42,7 +43,7 @@ where
             }
         }
 
-        for prop in cal.lock().unwrap().get_properties().await.values() {
+        for prop in cal.lock().await.get_properties().await.values() {
             print_property(prop);
         }
     }
@@ -54,8 +55,8 @@ where
     C: DavCalendar,
 {
     for (url, cal) in cals {
-        println!("CAL {} ({})", cal.lock().unwrap().name(), url);
-        match cal.lock().unwrap().get_item_version_tags().await {
+        println!("CAL {} ({})", cal.lock().await.name(), url);
+        match cal.lock().await.get_item_version_tags().await {
             Err(_err) => continue,
             Ok(map) => {
                 for (url, version_tag) in map {

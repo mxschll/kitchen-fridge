@@ -1,7 +1,7 @@
 mod scenarii;
 
 #[cfg(feature = "local_calendar_mocks_remote_calendars")]
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 #[cfg(feature = "local_calendar_mocks_remote_calendars")]
 use kitchen_fridge::mock_behaviour::MockBehaviour;

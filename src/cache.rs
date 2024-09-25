@@ -4,11 +4,12 @@ use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::path::Path;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use csscolorparser::Color;
 use serde::{Deserialize, Serialize};
+use tokio::sync::Mutex;
 use url::Url;
 
 use crate::calendar::cached_calendar::CachedCalendar;
@@ -145,7 +146,7 @@ impl Cache {
     /// Store the current Cache to its backing folder
     ///
     /// Note that this is automatically called when `self` is `drop`ped
-    pub fn save_to_folder(&self) -> Result<(), std::io::Error> {
+    pub async fn save_to_folder(&self) -> Result<(), std::io::Error> {
         let folder = &self.backing_folder;
         std::fs::create_dir_all(folder)?;
 
@@ -158,7 +159,7 @@ impl Cache {
         for (cal_url, cal_mutex) in &self.data.calendars {
             let cal_file = self.calendar_path(cal_url);
             let file = std::fs::File::create(&cal_file)?;
-            let cal = cal_mutex.lock().unwrap();
+            let cal = cal_mutex.lock().await;
             serde_json::to_writer(file, &*cal)?;
         }
 
@@ -191,12 +192,12 @@ impl Cache {
 
         for (calendar_url, cal_l) in calendars_l {
             log::debug!("Comparing calendars {}", calendar_url);
-            let cal_l = cal_l.lock().unwrap();
+            let cal_l = cal_l.lock().await;
             let cal_r = calendars_r
                 .get(&calendar_url)
                 .expect("should not happen, we've just tested keys are the same")
                 .lock()
-                .unwrap();
+                .await;
 
             // TODO: check calendars have the same names/ID/whatever
             if !(cal_l
@@ -211,24 +212,60 @@ impl Cache {
     }
 }
 
-impl Drop for Cache {
-    fn drop(&mut self) {
-        if let Err(err) = self.save_to_folder() {
-            log::error!(
-                "Unable to automatically save the cache when it's no longer required: {}",
-                err
-            );
-        }
-    }
-}
+// impl Default for Cache {
+//     fn default() -> Self {
+//         Self {
+//             backing_folder: PathBuf::new(),
+//             data: CachedData::default(),
+//             #[cfg(feature = "local_calendar_mocks_remote_calendars")]
+//             mock_behaviour: None,
+//             dropped: false,
+//         }
+//     }
+// }
+
+// impl Drop for Cache {
+//     fn drop(&mut self) {
+//         if !self.dropped {
+//             let mut this = Self::default();
+//             std::mem::swap(&mut this, self);
+//             this.dropped = true;
+//             let fut = self.clone().save_to_folder();
+//             tokio::spawn(async move {
+//                 fut.await.unwrap();
+//                 // if let Err(err) = self.save_to_folder().await {
+//                 //     log::error!(
+//                 //         "Unable to automatically save the cache when it's no longer required: {}",
+//                 //         err
+//                 //     );
+//                 // }
+//             });
+//         }
+//     }
+// }
+
+// #[async_trait]
+// impl AsyncDrop for Cache {
+//     async fn async_drop(&mut self) -> Result<(), AsyncDropError> {
+//         if let Err(err) = self.save_to_folder().await {
+//             log::error!(
+//                 "Unable to automatically save the cache when it's no longer required: {}",
+//                 err
+//             );
+//         }
+
+//         Ok(())
+//     }
+// }
 
 impl Cache {
     /// The non-async version of [`crate::traits::CalDavSource::get_calendars`]
-    pub fn get_calendars_sync(&self) -> KFResult<HashMap<Url, Arc<Mutex<CachedCalendar>>>> {
+    //FIXME misnomer
+    pub async fn get_calendars_sync(&self) -> KFResult<HashMap<Url, Arc<Mutex<CachedCalendar>>>> {
         #[cfg(feature = "local_calendar_mocks_remote_calendars")]
-        self.mock_behaviour
-            .as_ref()
-            .map_or(Ok(()), |b| b.lock().unwrap().can_get_calendars())?;
+        if let Some(b) = self.mock_behaviour.as_ref() {
+            b.lock().await.can_get_calendars()?;
+        }
 
         Ok(self
             .data
@@ -270,7 +307,7 @@ impl Cache {
 #[async_trait]
 impl CalDavSource<CachedCalendar> for Cache {
     async fn get_calendars(&self) -> KFResult<HashMap<Url, Arc<Mutex<CachedCalendar>>>> {
-        self.get_calendars_sync()
+        self.get_calendars_sync().await
     }
 
     async fn get_calendar(&self, url: &Url) -> Option<Arc<Mutex<CachedCalendar>>> {
@@ -286,9 +323,9 @@ impl CalDavSource<CachedCalendar> for Cache {
     ) -> KFResult<Arc<Mutex<CachedCalendar>>> {
         log::debug!("Inserting local calendar {}", url);
         #[cfg(feature = "local_calendar_mocks_remote_calendars")]
-        self.mock_behaviour
-            .as_ref()
-            .map_or(Ok(()), |b| b.lock().unwrap().can_create_calendar())?;
+        if let Some(b) = self.mock_behaviour.as_ref() {
+            b.lock().await.can_create_calendar()?;
+        }
 
         let new_calendar = CachedCalendar::new(name, url.clone(), supported_components, color);
         let arc = Arc::new(Mutex::new(new_calendar));
@@ -296,7 +333,7 @@ impl CalDavSource<CachedCalendar> for Cache {
         #[cfg(feature = "local_calendar_mocks_remote_calendars")]
         if let Some(behaviour) = &self.mock_behaviour {
             arc.lock()
-                .unwrap()
+                .await
                 .set_mock_behaviour(Some(Arc::clone(behaviour)));
         };
 
@@ -348,7 +385,7 @@ mod tests {
             .unwrap();
 
         {
-            let mut bucket_list = bucket_list.lock().unwrap();
+            let mut bucket_list = bucket_list.lock().await;
             let cal_url = bucket_list.url().clone();
             bucket_list
                 .add_item(Item::Task(Task::new(
@@ -378,7 +415,7 @@ mod tests {
         let cache_path = PathBuf::from(String::from("test_cache/serde_test"));
         let cache = populate_cache(&cache_path).await;
 
-        cache.save_to_folder().unwrap();
+        cache.save_to_folder().await.unwrap();
 
         let retrieved_cache = Cache::from_folder(&cache_path).unwrap();
         assert_eq!(cache.backing_folder, retrieved_cache.backing_folder);

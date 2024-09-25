@@ -12,7 +12,8 @@ use kitchen_fridge::error::KFResult;
 use kitchen_fridge::utils::prop::Property;
 use kitchen_fridge::utils::sync::{SyncStatus, Syncable, VersionTag};
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 use url::Url;
 
 use chrono::Utc;

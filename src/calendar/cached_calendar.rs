@@ -4,6 +4,8 @@ use async_trait::async_trait;
 use csscolorparser::Color;
 use serde::{Deserialize, Serialize};
 use serde_json_any_key::any_key_map;
+#[cfg(feature = "local_calendar_mocks_remote_calendars")]
+use tokio::sync::Mutex;
 use url::Url;
 
 use crate::calendar::SupportedComponents;
@@ -21,7 +23,7 @@ use crate::Item;
 #[cfg(feature = "local_calendar_mocks_remote_calendars")]
 use crate::mock_behaviour::MockBehaviour;
 #[cfg(feature = "local_calendar_mocks_remote_calendars")]
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 #[cfg(feature = "local_calendar_mocks_remote_calendars")]
 fn print_props(desc: &str, props: &HashMap<NamespacedName, Property>) {
@@ -70,11 +72,11 @@ impl CachedCalendar {
     }
 
     #[cfg(feature = "local_calendar_mocks_remote_calendars")]
-    fn add_item_maybe_mocked(&mut self, item: Item) -> KFResult<SyncStatus> {
+    async fn add_item_maybe_mocked(&mut self, item: Item) -> KFResult<SyncStatus> {
         if self.mock_behaviour.is_some() {
-            self.mock_behaviour
-                .as_ref()
-                .map_or(Ok(()), |b| b.lock().unwrap().can_add_item())?;
+            if let Some(b) = self.mock_behaviour.as_ref() {
+                b.lock().await.can_add_item()?;
+            }
             Ok(self.add_or_update_item_force_synced(item))
         } else {
             Ok(self.regular_add_or_update_item(item))
@@ -82,11 +84,11 @@ impl CachedCalendar {
     }
 
     #[cfg(feature = "local_calendar_mocks_remote_calendars")]
-    fn update_item_maybe_mocked(&mut self, item: Item) -> KFResult<SyncStatus> {
+    async fn update_item_maybe_mocked(&mut self, item: Item) -> KFResult<SyncStatus> {
         if self.mock_behaviour.is_some() {
-            self.mock_behaviour
-                .as_ref()
-                .map_or(Ok(()), |b| b.lock().unwrap().can_update_item())?;
+            if let Some(b) = self.mock_behaviour.as_ref() {
+                b.lock().await.can_update_item()?;
+            }
             Ok(self.add_or_update_item_force_synced(item))
         } else {
             Ok(self.regular_add_or_update_item(item))
@@ -115,11 +117,11 @@ impl CachedCalendar {
     }
 
     #[cfg(feature = "local_calendar_mocks_remote_calendars")]
-    fn set_property_maybe_mocked(&mut self, prop: Property) -> KFResult<SyncStatus> {
+    async fn set_property_maybe_mocked(&mut self, prop: Property) -> KFResult<SyncStatus> {
         if self.mock_behaviour.is_some() {
-            self.mock_behaviour
-                .as_ref()
-                .map_or(Ok(()), |b| b.lock().unwrap().can_set_property())?;
+            if let Some(b) = self.mock_behaviour.as_ref() {
+                b.lock().await.can_set_property()?;
+            }
             Ok(self.set_property_force_synced(prop))
         } else {
             Ok(self.regular_set_property(prop))
@@ -245,7 +247,8 @@ impl CachedCalendar {
     }
 
     /// The non-async version of [`Self::add_item`]
-    pub fn add_item_sync(&mut self, item: Item) -> KFResult<SyncStatus> {
+    //FIXME misnomer
+    pub async fn add_item_sync(&mut self, item: Item) -> KFResult<SyncStatus> {
         if self.items.contains_key(item.url()) {
             return Err(KFError::ItemAlreadyExists {
                 type_: item.type_(),
@@ -257,11 +260,12 @@ impl CachedCalendar {
         return Ok(self.regular_add_or_update_item(item));
 
         #[cfg(feature = "local_calendar_mocks_remote_calendars")]
-        return self.add_item_maybe_mocked(item);
+        return self.add_item_maybe_mocked(item).await;
     }
 
     /// The non-async version of [`Self::update_item`]
-    pub fn update_item_sync(&mut self, item: Item) -> KFResult<SyncStatus> {
+    //FIXME misnomer
+    pub async fn update_item_sync(&mut self, item: Item) -> KFResult<SyncStatus> {
         if !self.items.contains_key(item.url()) {
             return Err(KFError::ItemDoesNotExist {
                 type_: Some(item.type_()),
@@ -273,15 +277,16 @@ impl CachedCalendar {
         return Ok(self.regular_add_or_update_item(item));
 
         #[cfg(feature = "local_calendar_mocks_remote_calendars")]
-        return self.update_item_maybe_mocked(item);
+        return self.update_item_maybe_mocked(item).await;
     }
 
-    fn set_property_sync(&mut self, prop: Property) -> KFResult<SyncStatus> {
+    //FIXME misnomer
+    async fn set_property_sync(&mut self, prop: Property) -> KFResult<SyncStatus> {
         #[cfg(not(feature = "local_calendar_mocks_remote_calendars"))]
         return Ok(self.regular_set_property(prop));
 
         #[cfg(feature = "local_calendar_mocks_remote_calendars")]
-        return self.set_property_maybe_mocked(prop);
+        return self.set_property_maybe_mocked(prop).await;
     }
 
     pub fn mark_for_deletion_sync(&mut self) {
@@ -367,7 +372,7 @@ impl BaseCalendar for CachedCalendar {
     }
 
     async fn set_property(&mut self, prop: Property) -> KFResult<SyncStatus> {
-        self.set_property_sync(prop)
+        self.set_property_sync(prop).await
     }
 
     async fn get_properties_by_name(
@@ -381,11 +386,11 @@ impl BaseCalendar for CachedCalendar {
     }
 
     async fn add_item(&mut self, item: Item) -> KFResult<SyncStatus> {
-        self.add_item_sync(item)
+        self.add_item_sync(item).await
     }
 
     async fn update_item(&mut self, item: Item) -> KFResult<SyncStatus> {
-        self.update_item_sync(item)
+        self.update_item_sync(item).await
     }
 }
 
@@ -520,9 +525,9 @@ impl DavCalendar for CachedCalendar {
 
     async fn get_item_version_tags(&self) -> KFResult<HashMap<Url, VersionTag>> {
         #[cfg(feature = "local_calendar_mocks_remote_calendars")]
-        self.mock_behaviour
-            .as_ref()
-            .map_or(Ok(()), |b| b.lock().unwrap().can_get_item_version_tags())?;
+        if let Some(b) = self.mock_behaviour.as_ref() {
+            b.lock().await.can_get_item_version_tags()?;
+        }
 
         let mut result = HashMap::new();
 
@@ -544,9 +549,9 @@ impl DavCalendar for CachedCalendar {
 
     async fn get_item_by_url(&self, url: &Url) -> KFResult<Option<Item>> {
         #[cfg(feature = "local_calendar_mocks_remote_calendars")]
-        self.mock_behaviour
-            .as_ref()
-            .map_or(Ok(()), |b| b.lock().unwrap().can_get_item_by_url())?;
+        if let Some(b) = self.mock_behaviour.as_ref() {
+            b.lock().await.can_get_item_by_url()?;
+        }
 
         Ok(self.items.get(url).cloned())
     }
@@ -561,20 +566,18 @@ impl DavCalendar for CachedCalendar {
 
     async fn delete_item(&mut self, item_url: &Url) -> KFResult<()> {
         #[cfg(feature = "local_calendar_mocks_remote_calendars")]
-        self.mock_behaviour
-            .as_ref()
-            .map_or(Ok(()), |b| b.lock().unwrap().can_delete_item())?;
+        if let Some(b) = self.mock_behaviour.as_ref() {
+            b.lock().await.can_delete_item()?;
+        }
 
         self.immediately_delete_item(item_url).await
     }
 
     async fn get_properties(&self) -> KFResult<Vec<Property>> {
         #[cfg(feature = "local_calendar_mocks_remote_calendars")]
-        self.mock_behaviour
-            .as_ref()
-            .map_or(Ok(Vec::<Property>::new()), |b| {
-                b.lock().unwrap().can_get_properties().map(|_| Vec::new())
-            })?;
+        if let Some(b) = self.mock_behaviour.as_ref() {
+            b.lock().await.can_get_properties()?;
+        }
 
         Ok(CompleteCalendar::get_properties(self)
             .await
@@ -585,20 +588,18 @@ impl DavCalendar for CachedCalendar {
 
     async fn get_property(&self, nsn: &NamespacedName) -> KFResult<Option<Property>> {
         #[cfg(feature = "local_calendar_mocks_remote_calendars")]
-        self.mock_behaviour
-            .as_ref()
-            .map_or(Ok(Option::<Property>::None), |b| {
-                b.lock().unwrap().can_get_property().map(|_| None)
-            })?;
+        if let Some(b) = self.mock_behaviour.as_ref() {
+            b.lock().await.can_get_property()?;
+        }
 
         Ok(self.get_property_by_name(nsn).await.cloned())
     }
 
     async fn delete_property(&mut self, nsn: &NamespacedName) -> KFResult<()> {
         #[cfg(feature = "local_calendar_mocks_remote_calendars")]
-        self.mock_behaviour
-            .as_ref()
-            .map_or(Ok(()), |b| b.lock().unwrap().can_delete_property())?;
+        if let Some(b) = self.mock_behaviour.as_ref() {
+            b.lock().await.can_delete_property()?;
+        }
 
         self.immediately_delete_prop(nsn).await
     }
