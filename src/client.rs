@@ -30,7 +30,6 @@ static DAVCLIENT_BODY: &str = r#"
 
 static HOMESET_BODY: &str = r#"
     <d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav" >
-      <d:self/>
       <d:prop>
         <c:calendar-home-set />
       </d:prop>
