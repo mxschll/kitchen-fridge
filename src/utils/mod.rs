@@ -12,7 +12,6 @@ use sync::Syncable;
 use tokio::sync::Mutex;
 use url::Url;
 
-use crate::item::SyncStatus;
 use crate::traits::CompleteCalendar;
 use crate::traits::DavCalendar;
 use crate::Item;
