@@ -28,7 +28,7 @@ async fn main() {
     println!(
         "You can also set the RUST_LOG environment variable to display more info about the sync."
     );
-    println!("");
+    println!();
     println!("This will use the following settings:");
     println!("  * URL = {}", URL);
     println!("  * USERNAME = {}", USERNAME);
@@ -76,7 +76,7 @@ async fn add_items_and_sync_again(provider: &mut CalDavProvider) {
         .await
         .unwrap()
         .lock()
-        .unwrap()
+        .await
         .add_item(Item::Task(new_task))
         .await
         .unwrap();
@@ -92,12 +92,12 @@ async fn add_items_and_sync_again(provider: &mut CalDavProvider) {
         .await
         .unwrap()
         .lock()
-        .unwrap()
+        .await
         .add_item(Item::Task(new_task))
         .await
         .unwrap();
 
-    if provider.sync().await == false {
+    if !(provider.sync().await) {
         log::warn!("Sync did not complete, see the previous log lines for more info. You can safely start a new sync. The new task may not have been synced.");
     } else {
         println!(
@@ -105,7 +105,7 @@ async fn add_items_and_sync_again(provider: &mut CalDavProvider) {
             new_task_name, new_calendar_name
         );
     }
-    provider.local().save_to_folder().unwrap();
+    provider.local().save_to_folder().await.unwrap();
 
     complete_item_and_sync_again(provider, &changed_calendar_url, &new_url).await;
 }
@@ -125,19 +125,19 @@ async fn complete_item_and_sync_again(
         .await
         .unwrap()
         .lock()
-        .unwrap()
+        .await
         .get_item_by_url_mut(url_to_complete)
         .await
         .unwrap()
         .unwrap_task_mut()
         .set_completion_status(completion_status);
 
-    if provider.sync().await == false {
+    if !(provider.sync().await) {
         log::warn!("Sync did not complete, see the previous log lines for more info. You can safely start a new sync. The new task may not have been synced.");
     } else {
         println!("Done syncing the completed task");
     }
-    provider.local().save_to_folder().unwrap();
+    provider.local().save_to_folder().await.unwrap();
 
     remove_items_and_sync_again(provider, changed_calendar_url, url_to_complete).await;
 }
@@ -157,17 +157,17 @@ async fn remove_items_and_sync_again(
         .await
         .unwrap()
         .lock()
-        .unwrap()
-        .mark_for_deletion(id_to_remove)
+        .await
+        .mark_item_for_deletion(id_to_remove)
         .await
         .unwrap();
 
-    if provider.sync().await == false {
+    if !(provider.sync().await) {
         log::warn!("Sync did not complete, see the previous log lines for more info. You can safely start a new sync. The new task may not have been synced.");
     } else {
         println!("Done syncing the deleted task");
     }
-    provider.local().save_to_folder().unwrap();
+    provider.local().save_to_folder().await.unwrap();
 
     println!("Done. You can start this example again to see the cache being restored from its current saved state")
 }

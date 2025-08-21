@@ -9,12 +9,21 @@ pub enum SyncEvent {
     NotStarted,
     /// Sync has just started but no calendar is handled yet
     Started,
-    /// Sync is in progress.
-    InProgress {
-        calendar: String,
+
+    /// Item sync is in progress.
+    ItemsInProgress {
+        calendar_name: String,
         items_done_already: usize,
         details: String,
     },
+
+    /// Property sync is in progress.
+    PropsInProgress {
+        calendar_name: String,
+        props_done_already: usize,
+        details: String,
+    },
+
     /// Sync is finished
     Finished { success: bool },
 }
@@ -24,11 +33,24 @@ impl Display for SyncEvent {
         match self {
             SyncEvent::NotStarted => write!(f, "Not started"),
             SyncEvent::Started => write!(f, "Sync has started..."),
-            SyncEvent::InProgress {
-                calendar,
+            SyncEvent::ItemsInProgress {
+                calendar_name,
                 items_done_already,
                 details,
-            } => write!(f, "{} [{}/?] {}...", calendar, items_done_already, details),
+            } => write!(
+                f,
+                "(i) {} [{}/?] {}...",
+                calendar_name, items_done_already, details
+            ),
+            SyncEvent::PropsInProgress {
+                calendar_name,
+                props_done_already,
+                details,
+            } => write!(
+                f,
+                "(p) {} [{}/?] {}...",
+                calendar_name, props_done_already, details
+            ),
             SyncEvent::Finished { success } => match success {
                 true => write!(f, "Sync successfully finished"),
                 false => write!(f, "Sync finished with errors"),
@@ -121,5 +143,11 @@ impl SyncProgress {
         self.feedback_channel
             .as_ref()
             .map(|sender| sender.send(event));
+    }
+}
+
+impl Default for SyncProgress {
+    fn default() -> Self {
+        Self::new()
     }
 }

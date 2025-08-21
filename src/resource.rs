@@ -30,7 +30,7 @@ impl Resource {
     /// Build a new Resource by keeping the same credentials, scheme and server from `base` but changing the path part
     pub fn combine(&self, new_path: &str) -> Resource {
         let mut built = (*self).clone();
-        built.url.set_path(&new_path);
+        built.url.set_path(new_path);
         built
     }
 }

@@ -31,6 +31,8 @@
     html_logo_url = "https://raw.githubusercontent.com/daladim/kitchen-fridge/master/resources/kitchen-fridge.svg"
 )]
 
+pub mod error;
+
 pub mod traits;
 
 pub mod calendar;

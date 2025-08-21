@@ -1,11 +1,10 @@
 //! A module to build ICal files
 
-use std::error::Error;
-
 use chrono::{DateTime, Utc};
 use ical::property::Property as IcalProperty;
 use ics::components::Parameter as IcsParameter;
 use ics::components::Property as IcsProperty;
+use ics::properties::RelatedTo;
 use ics::properties::{Completed, Created, LastModified, PercentComplete, Status, Summary};
 use ics::{ICalendar, ToDo};
 
@@ -14,22 +13,27 @@ use crate::task::CompletionStatus;
 use crate::Task;
 
 /// Create an iCal item from a `crate::item::Item`
-pub fn build_from(item: &Item) -> Result<String, Box<dyn Error>> {
+pub fn build_from(item: &Item) -> String {
     match item {
         Item::Task(t) => build_from_task(t),
         _ => unimplemented!(),
     }
 }
 
-pub fn build_from_task(task: &Task) -> Result<String, Box<dyn Error>> {
+pub fn build_from_task(task: &Task) -> String {
     let s_last_modified = format_date_time(task.last_modified());
 
     let mut todo = ToDo::new(task.uid(), s_last_modified.clone());
 
-    task.creation_date()
-        .map(|dt| todo.push(Created::new(format_date_time(dt))));
+    if let Some(dt) = task.creation_date() {
+        todo.push(Created::new(format_date_time(dt)));
+    }
+
     todo.push(LastModified::new(s_last_modified));
     todo.push(Summary::new(task.name()));
+    for rel in task.relationships() {
+        todo.push(RelatedTo::new(rel.to_string()));
+    }
 
     match task.completion_status() {
         CompletionStatus::Uncompleted => {
@@ -37,9 +41,9 @@ pub fn build_from_task(task: &Task) -> Result<String, Box<dyn Error>> {
         }
         CompletionStatus::Completed(completion_date) => {
             todo.push(PercentComplete::new("100"));
-            completion_date
-                .as_ref()
-                .map(|dt| todo.push(Completed::new(format_date_time(dt))));
+            if let Some(dt) = completion_date.as_ref() {
+                todo.push(Completed::new(format_date_time(dt)));
+            }
             todo.push(Status::completed());
         }
     }
@@ -53,7 +57,7 @@ pub fn build_from_task(task: &Task) -> Result<String, Box<dyn Error>> {
     let mut calendar = ICalendar::new("2.0", task.ical_prod_id());
     calendar.add_todo(todo);
 
-    Ok(calendar.to_string())
+    calendar.to_string()
 }
 
 fn format_date_time(dt: &DateTime<Utc>) -> String {
@@ -65,12 +69,12 @@ fn ical_to_ics_property(prop: IcalProperty) -> IcsProperty<'static> {
         Some(value) => IcsProperty::new(prop.name, value),
         None => IcsProperty::new(prop.name, ""),
     };
-    prop.params.map(|v| {
+    if let Some(v) = prop.params {
         for (key, vec_values) in v {
             let values = vec_values.join(";");
             ics_prop.add(IcsParameter::new(key, values));
         }
-    });
+    }
     ics_prop
 }
 
@@ -150,7 +154,7 @@ mod tests {
             &cal_url,
         ));
 
-        let ical = build_from(&task).unwrap();
+        let ical = build_from(&task);
         (s_now, task.uid().to_string(), ical)
     }
 

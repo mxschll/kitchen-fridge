@@ -1,31 +1,63 @@
 //! A module to parse ICal files
 
-use std::error::Error;
-
 use chrono::{DateTime, TimeZone, Utc};
 use ical::parser::ical::component::{IcalCalendar, IcalEvent, IcalTodo};
+use ical::parser::ParserError;
 use url::Url;
 
-use crate::item::SyncStatus;
-use crate::task::CompletionStatus;
+use crate::task::{CompletionStatus, Relationship};
+use crate::utils::sync::SyncStatus;
 use crate::Event;
 use crate::Item;
 use crate::Task;
+
+/// FIXME Some of these errors are hard to tell apart
+#[derive(thiserror::Error, Debug)]
+pub enum IcalParseError {
+    #[error("Item has more than a single item of a single type: #events {n_events} #todos #{n_todos} #journals #{n_journals}")]
+    ItemNotOfSingleType {
+        n_events: usize,
+        n_todos: usize,
+        n_journals: usize,
+    },
+
+    #[error("Invalid iCal data to parse for item {item_url}")]
+    InvalidData { item_url: Url },
+
+    #[error("Missing DTSTAMP for item {item_url}, but this is required by RFC5545")]
+    MissingDtstamp { item_url: Url },
+
+    #[error("Missing name for item {item_url}")]
+    MissingName { item_url: Url },
+
+    #[error("Missing UID for item {item_url}")]
+    MissingUid { item_url: Url },
+
+    #[error("Parsing multiple items are not supported")]
+    MultipleItems,
+
+    #[error("Property {prop_name} has no value")]
+    PropertyHasNoValue { prop_name: String },
+
+    #[error("Unable to parseiCal data for item {item_url}: {source}")]
+    UnableToParse { item_url: Url, source: ParserError },
+}
 
 /// Parse an iCal file into the internal representation [`crate::Item`]
 pub fn parse(
     content: &str,
     item_url: Url,
     sync_status: SyncStatus,
-) -> Result<Item, Box<dyn Error>> {
+) -> Result<Item, IcalParseError> {
     let mut reader = ical::IcalParser::new(content.as_bytes());
     let parsed_item = match reader.next() {
-        None => return Err(format!("Invalid iCal data to parse for item {}", item_url).into()),
+        None => return Err(IcalParseError::InvalidData { item_url }),
         Some(item) => match item {
             Err(err) => {
-                return Err(
-                    format!("Unable to parse iCal data for item {}: {}", item_url, err).into(),
-                )
+                return Err(IcalParseError::UnableToParse {
+                    item_url,
+                    source: err,
+                })
             }
             Ok(item) => item,
         },
@@ -33,7 +65,7 @@ pub fn parse(
 
     let ical_prod_id = extract_ical_prod_id(&parsed_item)
         .map(|s| s.to_string())
-        .unwrap_or_else(|| super::default_prod_id());
+        .unwrap_or_else(super::default_prod_id);
 
     let item = match assert_single_type(&parsed_item)? {
         CurrentType::Event(_) => Item::Event(Event::new()),
@@ -46,6 +78,7 @@ pub fn parse(
             let mut completion_date = None;
             let mut creation_date = None;
             let mut extra_parameters = Vec::new();
+            let mut relationships = Vec::new();
 
             for prop in &todo.properties {
                 match prop.name.as_str() {
@@ -76,13 +109,38 @@ pub fn parse(
                         // The property can be specified once, but is not mandatory
                         creation_date = parse_date_time_from_property(&prop.value)
                     }
+                    "RELATED-TO" => {
+                        let reltypes = prop
+                            .params
+                            .as_ref()
+                            .and_then(|params| {
+                                params
+                                    .iter()
+                                    .find(|p| p.0 == "RELTYPE")
+                                    .map(|p| p.1.clone())
+                            })
+                            .unwrap_or(vec!["PARENT".to_string()]);
+
+                        if reltypes.len() > 1 {
+                            log::warn!("Multiple RELTYPE parameter values: {:?}", reltypes);
+                        }
+
+                        relationships.push(Relationship::new(
+                            prop.value
+                                .clone()
+                                .ok_or(IcalParseError::PropertyHasNoValue {
+                                    prop_name: "RELATED-TO".into(),
+                                })?,
+                            reltypes[0].clone(),
+                        ));
+                    }
                     "STATUS" => {
                         // Possible values:
                         //   "NEEDS-ACTION" ;Indicates to-do needs action.
                         //   "COMPLETED"    ;Indicates to-do completed.
                         //   "IN-PROCESS"   ;Indicates to-do in process of.
                         //   "CANCELLED"    ;Indicates to-do was cancelled.
-                        if prop.value.as_ref().map(|s| s.as_str()) == Some("COMPLETED") {
+                        if prop.value.as_deref() == Some("COMPLETED") {
                             completed = true;
                         }
                     }
@@ -94,21 +152,15 @@ pub fn parse(
             }
             let name = match name {
                 Some(name) => name,
-                None => return Err(format!("Missing name for item {}", item_url).into()),
+                None => return Err(IcalParseError::MissingName { item_url }),
             };
             let uid = match uid {
                 Some(uid) => uid,
-                None => return Err(format!("Missing UID for item {}", item_url).into()),
+                None => return Err(IcalParseError::MissingUid { item_url }),
             };
             let last_modified = match last_modified {
                 Some(dt) => dt,
-                None => {
-                    return Err(format!(
-                        "Missing DTSTAMP for item {}, but this is required by RFC5545",
-                        item_url
-                    )
-                    .into())
-                }
+                None => return Err(IcalParseError::MissingDtstamp { item_url }),
             };
             let completion_status = match completed {
                 false => {
@@ -129,6 +181,7 @@ pub fn parse(
                 creation_date,
                 last_modified,
                 ical_prod_id,
+                relationships,
                 extra_parameters,
             ))
         }
@@ -136,7 +189,7 @@ pub fn parse(
 
     // What to do with multiple items?
     if reader.next().map(|r| r.is_ok()) == Some(true) {
-        return Err("Parsing multiple items are not supported".into());
+        return Err(IcalParseError::MultipleItems);
     }
 
     Ok(item)
@@ -161,7 +214,7 @@ fn parse_date_time_from_property(value: &Option<String>) -> Option<DateTime<Utc>
 fn extract_ical_prod_id(item: &IcalCalendar) -> Option<&str> {
     for prop in &item.properties {
         if &prop.name == "PRODID" {
-            return prop.value.as_ref().map(|s| s.as_str());
+            return prop.value.as_deref();
         }
     }
     None
@@ -172,14 +225,18 @@ enum CurrentType<'a> {
     Todo(&'a IcalTodo),
 }
 
-fn assert_single_type<'a>(item: &'a IcalCalendar) -> Result<CurrentType<'a>, Box<dyn Error>> {
+fn assert_single_type(item: &IcalCalendar) -> Result<CurrentType<'_>, IcalParseError> {
     let n_events = item.events.len();
     let n_todos = item.todos.len();
     let n_journals = item.journals.len();
 
     if n_events == 1 {
         if n_todos != 0 || n_journals != 0 {
-            return Err("Only a single TODO or a single EVENT is supported".into());
+            return Err(IcalParseError::ItemNotOfSingleType {
+                n_events,
+                n_todos,
+                n_journals,
+            });
         } else {
             return Ok(CurrentType::Event(&item.events[0]));
         }
@@ -187,13 +244,21 @@ fn assert_single_type<'a>(item: &'a IcalCalendar) -> Result<CurrentType<'a>, Box
 
     if n_todos == 1 {
         if n_events != 0 || n_journals != 0 {
-            return Err("Only a single TODO or a single EVENT is supported".into());
+            return Err(IcalParseError::ItemNotOfSingleType {
+                n_events,
+                n_todos,
+                n_journals,
+            });
         } else {
             return Ok(CurrentType::Todo(&item.todos[0]));
         }
     }
 
-    return Err("Only a single TODO or a single EVENT is supported".into());
+    Err(IcalParseError::ItemNotOfSingleType {
+        n_events,
+        n_todos,
+        n_journals,
+    })
 }
 
 #[cfg(test)]
@@ -264,7 +329,7 @@ END:VCALENDAR
 "#;
 
     use super::*;
-    use crate::item::VersionTag;
+    use crate::utils::sync::{Syncable, VersionTag};
 
     #[test]
     fn test_ical_parsing() {
@@ -281,12 +346,12 @@ END:VCALENDAR
             task.uid(),
             "0633de27-8c32-42be-bcb8-63bc879c6185@some-domain.com"
         );
-        assert_eq!(task.completed(), false);
+        assert!(!task.completed());
         assert_eq!(task.completion_status(), &CompletionStatus::Uncompleted);
         assert_eq!(task.sync_status(), &sync_status);
         assert_eq!(
             task.last_modified(),
-            &Utc.ymd(2021, 03, 21).and_hms(0, 16, 0)
+            &Utc.ymd(2021, 3, 21).and_hms(0, 16, 0)
         );
     }
 
@@ -304,10 +369,10 @@ END:VCALENDAR
         .unwrap();
         let task = item.unwrap_task();
 
-        assert_eq!(task.completed(), true);
+        assert!(task.completed());
         assert_eq!(
             task.completion_status(),
-            &CompletionStatus::Completed(Some(Utc.ymd(2021, 04, 02).and_hms(8, 15, 57)))
+            &CompletionStatus::Completed(Some(Utc.ymd(2021, 4, 2).and_hms(8, 15, 57)))
         );
     }
 
@@ -325,7 +390,7 @@ END:VCALENDAR
         .unwrap();
         let task = item.unwrap_task();
 
-        assert_eq!(task.completed(), true);
+        assert!(task.completed());
         assert_eq!(task.completion_status(), &CompletionStatus::Completed(None));
     }
 
